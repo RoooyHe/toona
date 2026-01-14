@@ -1,0 +1,56 @@
+use makepad_widgets::Cx;
+
+pub mod add_room;
+pub mod edited_indicator;
+pub mod editing_pane;
+pub mod home_screen;
+pub mod invite_screen;
+pub mod light_themed_dock;
+pub mod tombstone_footer;
+pub mod loading_pane;
+pub mod location_preview;
+pub mod main_desktop_ui;
+pub mod main_mobile_ui;
+pub mod room_screen;
+pub mod room_read_receipt;
+pub mod rooms_list;
+pub mod rooms_list_entry;
+pub mod rooms_list_header;
+pub mod rooms_sidebar;
+pub mod search_messages;
+pub mod space_lobby;
+pub mod spaces_bar;
+pub mod navigation_tab_bar;
+pub mod welcome_screen;
+pub mod event_reaction_list;
+pub mod new_message_context_menu;
+pub mod link_preview;
+pub mod room_image_viewer;
+
+pub fn live_design(cx: &mut Cx) {
+    search_messages::live_design(cx);
+    home_screen::live_design(cx);
+    loading_pane::live_design(cx);
+    location_preview::live_design(cx);
+    add_room::live_design(cx);
+    space_lobby::live_design(cx);
+    rooms_list_entry::live_design(cx);
+    rooms_list_header::live_design(cx);
+    rooms_list::live_design(cx);
+    edited_indicator::live_design(cx);
+    editing_pane::live_design(cx);
+    new_message_context_menu::live_design(cx);
+    invite_screen::live_design(cx);
+    tombstone_footer::live_design(cx);
+    room_screen::live_design(cx);
+    room_read_receipt::live_design(cx);
+    rooms_sidebar::live_design(cx);
+    main_mobile_ui::live_design(cx);
+    main_desktop_ui::live_design(cx);
+    spaces_bar::live_design(cx);
+    navigation_tab_bar::live_design(cx);
+    welcome_screen::live_design(cx);
+    light_themed_dock::live_design(cx);
+    event_reaction_list::live_design(cx);
+    link_preview::live_design(cx);
+}

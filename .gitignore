@@ -1,0 +1,11 @@
+## Cargo generated directory
+/target
+## cargo-packager generated directory
+/dist
+
+.vscode
+.DS_Store
+CLAUDE.md
+proxychains.conf
+
+.idea
