@@ -7,5 +7,5 @@
 #![cfg_attr(all(feature = "hide_windows_console", target_os = "windows"), windows_subsystem = "windows")]
 
 fn main() {
-    robrix::app::app_main()
+    toona::app::app_main()
 }
