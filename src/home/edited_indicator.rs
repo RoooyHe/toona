@@ -11,7 +11,10 @@ use chrono::{DateTime, Local};
 use makepad_widgets::*;
 use matrix_sdk_ui::timeline::EventTimelineItem;
 
-use crate::{shared::callout_tooltip::{CalloutTooltipOptions, TooltipAction, TooltipPosition}, utils::unix_time_millis_to_datetime};
+use crate::{
+    shared::callout_tooltip::{CalloutTooltipOptions, TooltipAction, TooltipPosition},
+    utils::unix_time_millis_to_datetime,
+};
 
 live_design! {
     use link::theme::*;
@@ -49,8 +52,10 @@ live_design! {
 /// A interactive label that indicates a message has been edited.
 #[derive(Live, LiveHook, Widget)]
 pub struct EditedIndicator {
-    #[deref] view: View,
-    #[rust] latest_edit_ts: Option<DateTime<Local>>,
+    #[deref]
+    view: View,
+    #[rust]
+    latest_edit_ts: Option<DateTime<Local>>,
 }
 
 impl Widget for EditedIndicator {
@@ -75,7 +80,7 @@ impl Widget for EditedIndicator {
         };
         if should_hover_in {
             // TODO: use pure_rust_locales crate to format the time based on the chosen Locale.
-            let locale_extended_fmt_en_us= "%a %b %-d, %Y, %r";
+            let locale_extended_fmt_en_us = "%a %b %-d, %Y, %r";
             let text = if let Some(ts) = self.latest_edit_ts {
                 format!("Last edited {}", ts.format(locale_extended_fmt_en_us))
             } else {
@@ -90,7 +95,7 @@ impl Widget for EditedIndicator {
                     options: CalloutTooltipOptions {
                         position: TooltipPosition::Right,
                         ..Default::default()
-                    }
+                    },
                 },
             );
         }
@@ -123,7 +128,6 @@ impl EditedIndicatorRef {
         }
     }
 }
-
 
 /// Actions emitted by an `EditedIndicator` widget.
 #[derive(Clone, Debug, DefaultNone)]

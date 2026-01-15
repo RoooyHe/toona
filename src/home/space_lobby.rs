@@ -9,7 +9,6 @@
 use makepad_widgets::*;
 use crate::utils::RoomNameId;
 
-
 live_design! {
     use link::theme::*;
     use link::shaders::*;
@@ -195,12 +194,13 @@ live_design! {
     }
 }
 
-
 /// A clickable entry shown in the RoomsList that will show the space lobby when clicked.
 #[derive(Live, LiveHook, Widget)]
 pub struct SpaceLobbyEntry {
-    #[deref] view: View,
-    #[animator] animator: Animator,
+    #[deref]
+    view: View,
+    #[animator]
+    animator: Animator,
 }
 
 impl Widget for SpaceLobbyEntry {
@@ -230,7 +230,7 @@ impl Widget for SpaceLobbyEntry {
             Hit::FingerUp(fe) if !fe.is_over => {
                 self.animator_play(cx, ids!(hover.off));
             }
-            Hit::FingerMove(_fe) => { }
+            Hit::FingerMove(_fe) => {}
             _ => {}
         }
     }
@@ -240,25 +240,25 @@ impl Widget for SpaceLobbyEntry {
     }
 }
 
-
 #[derive(Debug)]
 pub enum SpaceLobbyAction {
     SpaceLobbyEntryClicked,
 }
 
-
 /// The view showing the lobby/homepage for a given space.
 #[derive(Live, LiveHook, Widget)]
 pub struct SpaceLobbyScreen {
-    #[deref] view: View,
-    #[rust] space_name_id: Option<RoomNameId>,
+    #[deref]
+    view: View,
+    #[rust]
+    space_name_id: Option<RoomNameId>,
 }
 
 impl Widget for SpaceLobbyScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
     }
-    
+
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         self.view.draw_walk(cx, scope, walk)
     }
@@ -267,14 +267,23 @@ impl Widget for SpaceLobbyScreen {
 impl SpaceLobbyScreen {
     pub fn set_displayed_space(&mut self, cx: &mut Cx, space_name_id: &RoomNameId) {
         // If this space is already being displayed, then do nothing.
-        if self.space_name_id.as_ref().is_some_and(|sni| sni.room_id() == space_name_id.room_id()) { return; }
+        if self
+            .space_name_id
+            .as_ref()
+            .is_some_and(|sni| sni.room_id() == space_name_id.room_id())
+        {
+            return;
+        }
 
-        self.view.label(ids!(title)).set_text(cx, &format!(
-            "Space Lobby Screen is not yet implemented.\n\n\
+        self.view.label(ids!(title)).set_text(
+            cx,
+            &format!(
+                "Space Lobby Screen is not yet implemented.\n\n\
             Space Name: {}\n\nSpace ID: {}",
-            space_name_id,
-            space_name_id.room_id(),
-        ));
+                space_name_id,
+                space_name_id.room_id(),
+            ),
+        );
 
         // TODO: populate the rest of the space lobby screen content
 
@@ -284,7 +293,9 @@ impl SpaceLobbyScreen {
 
 impl SpaceLobbyScreenRef {
     pub fn set_displayed_space(&self, cx: &mut Cx, space_name_id: &RoomNameId) {
-        let Some(mut inner) = self.borrow_mut() else { return };
+        let Some(mut inner) = self.borrow_mut() else {
+            return;
+        };
         inner.set_displayed_space(cx, space_name_id);
     }
 }

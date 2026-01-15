@@ -9,11 +9,19 @@
 use std::sync::Arc;
 
 use makepad_widgets::*;
-use matrix_sdk::{ruma::{EventId, OwnedRoomId, OwnedUserId, RoomId, UserId}};
+use matrix_sdk::{
+    ruma::{EventId, OwnedRoomId, OwnedUserId, RoomId, UserId},
+};
 use matrix_sdk_ui::timeline::{Profile, TimelineDetails};
 
 use crate::{
-    avatar_cache::{self, AvatarCacheEntry}, profile::{user_profile::{AvatarState, ShowUserProfileAction, UserProfile, UserProfileAndRoomId}, user_profile_cache}, sliding_sync::{submit_async_request, MatrixRequest}, utils
+    avatar_cache::{self, AvatarCacheEntry},
+    profile::{
+        user_profile::{AvatarState, ShowUserProfileAction, UserProfile, UserProfileAndRoomId},
+        user_profile_cache,
+    },
+    sliding_sync::{submit_async_request, MatrixRequest},
+    utils,
 };
 
 live_design! {
@@ -88,35 +96,40 @@ live_design! {
     }
 }
 
-
 #[derive(LiveHook, Live, Widget)]
 pub struct Avatar {
-    #[deref] view: View,
+    #[deref]
+    view: View,
 
     /// Information about the user profile being shown in this Avatar.
     /// If `Some`, this Avatar will respond to clicks/taps.
-    #[rust] info: Option<UserProfileAndRoomId>,
+    #[rust]
+    info: Option<UserProfileAndRoomId>,
 }
 
 impl Widget for Avatar {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
 
-        let Some(info) = self.info.clone() else { return };
+        let Some(info) = self.info.clone() else {
+            return;
+        };
         let area = self.view.area();
         let widget_uid = self.widget_uid();
         match event.hits(cx, area) {
             Hit::FingerDown(_fde) => {
                 cx.set_key_focus(area);
             }
-            Hit::FingerUp(fue) => if fue.is_over && fue.is_primary_hit() && fue.was_tap() {
-                cx.widget_action(
-                    widget_uid,
-                    &scope.path,
-                    ShowUserProfileAction::ShowUserProfile(info),
-                );
+            Hit::FingerUp(fue) => {
+                if fue.is_over && fue.is_primary_hit() && fue.was_tap() {
+                    cx.widget_action(
+                        widget_uid,
+                        &scope.path,
+                        ShowUserProfileAction::ShowUserProfile(info),
+                    );
+                }
             }
-            _ =>()
+            _ => (),
         }
     }
 
@@ -126,7 +139,8 @@ impl Widget for Avatar {
 
     fn set_text(&mut self, cx: &mut Cx, v: &str) {
         let f = utils::user_name_first_letter(v)
-            .unwrap_or("?").to_uppercase();
+            .unwrap_or("?")
+            .to_uppercase();
         self.label(ids!(text_view.text)).set_text(cx, &f);
         self.view(ids!(img_view)).set_visible(cx, false);
         self.view(ids!(text_view)).set_visible(cx, true);
@@ -151,7 +165,12 @@ impl Avatar {
         info: Option<AvatarTextInfo>,
         username: T,
     ) {
-        if let Some(AvatarTextInfo { user_id, username, room_id }) = info {
+        if let Some(AvatarTextInfo {
+            user_id,
+            username,
+            room_id,
+        }) = info
+        {
             self.info = Some(UserProfileAndRoomId {
                 user_profile: UserProfile {
                     user_id,
@@ -160,19 +179,22 @@ impl Avatar {
                 },
                 room_id,
             });
-            self.view.apply_over(cx, live!{ cursor: Hand });
+            self.view.apply_over(cx, live! { cursor: Hand });
         } else {
-            self.view.apply_over(cx, live!{ cursor: Default });
+            self.view.apply_over(cx, live! { cursor: Default });
         }
         self.set_text(cx, username.as_ref());
 
         // Apply background color if provided
         if let Some(color) = bg_color {
-            self.view(ids!(text_view)).apply_over(cx, live! {
-                draw_bg: {
-                    background_color: (color)
-                }
-            });
+            self.view(ids!(text_view)).apply_over(
+                cx,
+                live! {
+                    draw_bg: {
+                        background_color: (color)
+                    }
+                },
+            );
         }
     }
 
@@ -194,7 +216,8 @@ impl Avatar {
         info: Option<AvatarImageInfo>,
         image_set_function: F,
     ) -> Result<(), E>
-        where F: FnOnce(&mut Cx, ImageRef) -> Result<(), E>
+    where
+        F: FnOnce(&mut Cx, ImageRef) -> Result<(), E>,
     {
         let img_ref = self.image(ids!(img_view.img));
         let res = image_set_function(cx, img_ref);
@@ -202,7 +225,13 @@ impl Avatar {
             self.view(ids!(img_view)).set_visible(cx, true);
             self.view(ids!(text_view)).set_visible(cx, false);
 
-            if let Some(AvatarImageInfo { user_id, username, room_id, img_data }) = info {
+            if let Some(AvatarImageInfo {
+                user_id,
+                username,
+                room_id,
+                img_data,
+            }) = info
+            {
                 self.info = Some(UserProfileAndRoomId {
                     user_profile: UserProfile {
                         user_id,
@@ -211,9 +240,9 @@ impl Avatar {
                     },
                     room_id,
                 });
-                self.view.apply_over(cx, live!{ cursor: Hand });
+                self.view.apply_over(cx, live! { cursor: Hand });
             } else {
-                self.view.apply_over(cx, live!{ cursor: Default });
+                self.view.apply_over(cx, live! { cursor: Default });
             }
         }
         res
@@ -282,37 +311,47 @@ impl Avatar {
                     }
                 }
                 // log!("populate_message_view(): sender profile not ready yet for event {not_ready:?}");
-                user_profile_cache::with_user_profile(cx, avatar_user_id.to_owned(), true, |profile, room_members| {
-                    room_members
-                        .get(room_id)
-                        .map(|rm| {
-                            (
-                                rm.display_name().map(|n| n.to_owned()),
-                                AvatarState::Known(rm.avatar_url().map(|u| u.to_owned())),
-                            )
-                        })
-                        .unwrap_or_else(|| (profile.username.clone(), profile.avatar_state.clone()))
-                })
+                user_profile_cache::with_user_profile(
+                    cx,
+                    avatar_user_id.to_owned(),
+                    true,
+                    |profile, room_members| {
+                        room_members
+                            .get(room_id)
+                            .map(|rm| {
+                                (
+                                    rm.display_name().map(|n| n.to_owned()),
+                                    AvatarState::Known(rm.avatar_url().map(|u| u.to_owned())),
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                (profile.username.clone(), profile.avatar_state.clone())
+                            })
+                    },
+                )
                 .unwrap_or((None, AvatarState::Unknown))
             }
             None => {
-                match user_profile_cache::with_user_profile(cx, avatar_user_id.to_owned(), true, |profile, room_members| {
-                    room_members
-                        .get(room_id)
-                        .map(|rm| {
-                            (
-                                rm.display_name().map(|n| n.to_owned()),
-                                AvatarState::Known(rm.avatar_url().map(|u| u.to_owned())),
-                            )
-                        })
-                        .unwrap_or_else(|| (profile.username.clone(), profile.avatar_state.clone()))
-                }) {
-                    Some((profile_name, avatar_state)) => {
-                        (profile_name, avatar_state)
-                    }
-                    None => {
-                        (None, AvatarState::Unknown)
-                    }
+                match user_profile_cache::with_user_profile(
+                    cx,
+                    avatar_user_id.to_owned(),
+                    true,
+                    |profile, room_members| {
+                        room_members
+                            .get(room_id)
+                            .map(|rm| {
+                                (
+                                    rm.display_name().map(|n| n.to_owned()),
+                                    AvatarState::Known(rm.avatar_url().map(|u| u.to_owned())),
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                (profile.username.clone(), profile.avatar_state.clone())
+                            })
+                    },
+                ) {
+                    Some((profile_name, avatar_state)) => (profile_name, avatar_state),
+                    None => (None, AvatarState::Unknown),
                 }
             }
         };
@@ -338,12 +377,14 @@ impl Avatar {
             .and_then(|data| {
                 self.show_image(
                     cx,
-                    is_clickable.then(|| AvatarImageInfo::from((
-                        avatar_user_id.to_owned(),
-                        username_opt.clone(),
-                        room_id.to_owned(),
-                        data.clone()
-                    ))),
+                    is_clickable.then(|| {
+                        AvatarImageInfo::from((
+                            avatar_user_id.to_owned(),
+                            username_opt.clone(),
+                            room_id.to_owned(),
+                            data.clone(),
+                        ))
+                    }),
                     |cx, img| utils::load_png_or_jpg(&img, cx, &data),
                 )
                 .ok()
@@ -352,11 +393,13 @@ impl Avatar {
                 self.show_text(
                     cx,
                     None,
-                    is_clickable.then(|| AvatarTextInfo::from((
-                        avatar_user_id.to_owned(),
-                        username_opt,
-                        room_id.to_owned(),
-                    ))),
+                    is_clickable.then(|| {
+                        AvatarTextInfo::from((
+                            avatar_user_id.to_owned(),
+                            username_opt,
+                            room_id.to_owned(),
+                        ))
+                    }),
                     &username,
                 )
             });
@@ -385,7 +428,8 @@ impl AvatarRef {
         info: Option<AvatarImageInfo>,
         image_set_function: F,
     ) -> Result<(), E>
-        where F: FnOnce(&mut Cx, ImageRef) -> Result<(), E>
+    where
+        F: FnOnce(&mut Cx, ImageRef) -> Result<(), E>,
     {
         if let Some(mut inner) = self.borrow_mut() {
             inner.show_image(cx, info, image_set_function)
@@ -444,7 +488,11 @@ pub struct AvatarTextInfo {
 }
 impl From<(OwnedUserId, Option<String>, OwnedRoomId)> for AvatarTextInfo {
     fn from((user_id, username, room_id): (OwnedUserId, Option<String>, OwnedRoomId)) -> Self {
-        Self { user_id, username, room_id }
+        Self {
+            user_id,
+            username,
+            room_id,
+        }
     }
 }
 
@@ -456,7 +504,19 @@ pub struct AvatarImageInfo {
     pub img_data: Arc<[u8]>,
 }
 impl From<(OwnedUserId, Option<String>, OwnedRoomId, Arc<[u8]>)> for AvatarImageInfo {
-    fn from((user_id, username, room_id, img_data): (OwnedUserId, Option<String>, OwnedRoomId, Arc<[u8]>)) -> Self {
-        Self { user_id, username, room_id, img_data }
+    fn from(
+        (user_id, username, room_id, img_data): (
+            OwnedUserId,
+            Option<String>,
+            OwnedRoomId,
+            Arc<[u8]>,
+        ),
+    ) -> Self {
+        Self {
+            user_id,
+            username,
+            room_id,
+            img_data,
+        }
     }
 }

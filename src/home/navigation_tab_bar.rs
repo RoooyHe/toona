@@ -9,7 +9,7 @@
 //! 2. Add Room (plus sign icon): a separate view that allows adding (joining) existing rooms,
 //!    exploring public rooms, or creating new rooms/spaces.
 //! 3. Spaces: a button that toggles the `SpacesBar` (shows/hides it).
-//!    * This is NOT a regular radio button, it's a separate toggle. 
+//!    * This is NOT a regular radio button, it's a separate toggle.
 //!    * This is only shown in Mobile view mode, because the `SpacesBar` is always shown
 //!      within the NavigationTabBar itself in Desktop view mode.
 //! 4. Activity (an inbox, alert bell, or notifications icon): a separate view that shows
@@ -30,15 +30,21 @@
 
 use makepad_widgets::*;
 use crate::{
-    avatar_cache::{self, AvatarCacheEntry}, login::login_screen::LoginAction, logout::logout_confirm_modal::LogoutAction, profile::{
+    avatar_cache::{self, AvatarCacheEntry},
+    login::login_screen::LoginAction,
+    logout::logout_confirm_modal::LogoutAction,
+    profile::{
         user_profile::{AvatarState, UserProfile},
         user_profile_cache::{self, UserProfileUpdate},
-    }, shared::{
+    },
+    shared::{
         avatar::AvatarWidgetExt,
         callout_tooltip::{CalloutTooltipOptions, TooltipAction, TooltipPosition},
         styles::*,
         verification_badge::VerificationBadgeWidgetExt,
-    }, sliding_sync::current_user_id, utils::{self, RoomNameId}
+    },
+    sliding_sync::current_user_id,
+    utils::{self, RoomNameId},
 };
 
 live_design! {
@@ -58,10 +64,10 @@ live_design! {
         width: Fill,
         height: (NAVIGATION_TAB_BAR_SIZE - 5),
         padding: 5,
-        margin: 3, 
+        margin: 3,
         align: {x: 0.5, y: 0.5}
         flow: Down,
-        
+
         icon_walk: {margin: 0, width: (NAVIGATION_TAB_BAR_SIZE/2.2), height: Fit}
         // Fully hide the text with zero size, zero margin, and zero spacing
         label_walk: {margin: 0, width: 0, height: 0}
@@ -210,6 +216,10 @@ live_design! {
         draw_icon: { svg_file: (ICON_ADD) }
     }
 
+    KanbanButton = <NavigationTabButton> {
+        draw_icon: { svg_file: (ICON_SQUARES) }
+    }
+
     Separator = <LineH> { margin: 8 }
 
     pub NavigationTabBar = {{NavigationTabBar}}<AdaptiveView> {
@@ -217,7 +227,7 @@ live_design! {
             flow: Down,
             align: {x: 0.5}
             padding: {top: 40., bottom: 8}
-            width: (NAVIGATION_TAB_BAR_SIZE), 
+            width: (NAVIGATION_TAB_BAR_SIZE),
             height: Fill
 
             show_bg: true
@@ -237,6 +247,10 @@ live_design! {
                 add_room_button = <AddRoomButton> {}
             }
 
+            <CachedWidget> {
+                kanban_button = <KanbanButton> {}
+            }
+
             <Separator> {}
 
             <CachedWidget> {
@@ -244,7 +258,7 @@ live_design! {
             }
 
             <Separator> {}
-            
+
             <CachedWidget> {
                 settings_button = <SettingsButton> {}
             }
@@ -270,6 +284,10 @@ live_design! {
                 add_room_button = <AddRoomButton> {}
             }
 
+            <CachedWidget> {
+                kanban_button = <KanbanButton> {}
+            }
+
             toggle_spaces_bar_button = <ToggleSpacesBarButton> {}
 
             <CachedWidget> {
@@ -288,8 +306,10 @@ live_design! {
 /// Clicking on this icon will open the settings screen.
 #[derive(Live, Widget)]
 pub struct ProfileIcon {
-    #[deref] view: View,
-    #[rust] own_profile: Option<UserProfile>,
+    #[deref]
+    view: View,
+    #[rust]
+    own_profile: Option<UserProfile>,
 }
 
 impl LiveHook for ProfileIcon {
@@ -308,7 +328,11 @@ impl Widget for ProfileIcon {
             avatar_cache::process_avatar_updates(cx);
 
             // Refetch our profile if we don't have it yet, or if we're waiting for an avatar image.
-            if self.own_profile.as_ref().is_none_or(|p| p.avatar_state.uri().is_some()) {
+            if self
+                .own_profile
+                .as_ref()
+                .is_none_or(|p| p.avatar_state.uri().is_some())
+            {
                 self.own_profile = get_own_profile(cx);
                 if self.own_profile.is_some() {
                     self.view.redraw(cx);
@@ -388,11 +412,13 @@ impl Widget for ProfileIcon {
 
         let mut drew_avatar = false;
         if let Some(avatar_img_data) = own_profile.avatar_state.data() {
-            drew_avatar = our_own_avatar.show_image(
-                cx,
-                None, // don't make this avatar clickable; we handle clicks on this ProfileIcon widget directly.
-                |cx, img| utils::load_png_or_jpg(&img, cx, avatar_img_data),
-            ).is_ok();
+            drew_avatar = our_own_avatar
+                .show_image(
+                    cx,
+                    None, // don't make this avatar clickable; we handle clicks on this ProfileIcon widget directly.
+                    |cx, img| utils::load_png_or_jpg(&img, cx, avatar_img_data),
+                )
+                .is_ok();
         }
         if !drew_avatar {
             our_own_avatar.show_text(
@@ -407,16 +433,17 @@ impl Widget for ProfileIcon {
     }
 }
 
-
 /// The tab bar with buttons that navigate through top-level app pages.
 ///
 /// * In the "desktop" (wide) layout, this is a vertical bar on the left.
 /// * In the "mobile" (narrow) layout, this is a horizontal bar on the bottom.
 #[derive(Live, LiveHook, Widget)]
 pub struct NavigationTabBar {
-    #[deref] view: AdaptiveView,
+    #[deref]
+    view: AdaptiveView,
 
-    #[rust] is_spaces_bar_shown: bool,
+    #[rust]
+    is_spaces_bar_shown: bool,
 }
 
 impl Widget for NavigationTabBar {
@@ -428,16 +455,22 @@ impl Widget for NavigationTabBar {
             let radio_button_set = self.view.radio_button_set(ids_array!(
                 home_button,
                 add_room_button,
+                kanban_button,
                 settings_button,
             ));
             match radio_button_set.selected(cx, actions) {
                 Some(0) => cx.action(NavigationBarAction::GoToHome),
                 Some(1) => cx.action(NavigationBarAction::GoToAddRoom),
-                Some(2) => cx.action(NavigationBarAction::OpenSettings),
-                _ => { }
+                Some(2) => cx.action(NavigationBarAction::GoToKanban),
+                Some(3) => cx.action(NavigationBarAction::OpenSettings),
+                _ => {}
             }
 
-            if self.view.button(ids!(toggle_spaces_bar_button)).clicked(actions) {
+            if self
+                .view
+                .button(ids!(toggle_spaces_bar_button))
+                .clicked(actions)
+            {
                 self.is_spaces_bar_shown = !self.is_spaces_bar_shown;
                 cx.action(NavigationBarAction::ToggleSpacesBar);
             }
@@ -447,9 +480,21 @@ impl Widget for NavigationTabBar {
                 // update our radio buttons accordingly.
                 if let Some(NavigationBarAction::TabSelected(tab)) = action.downcast_ref() {
                     match tab {
-                        SelectedTab::Home     => self.view.radio_button(ids!(home_button)).select(cx, scope),
-                        SelectedTab::AddRoom  => self.view.radio_button(ids!(add_room_button)).select(cx, scope),
-                        SelectedTab::Settings => self.view.radio_button(ids!(settings_button)).select(cx, scope),
+                        SelectedTab::Home => {
+                            self.view.radio_button(ids!(home_button)).select(cx, scope)
+                        }
+                        SelectedTab::AddRoom => self
+                            .view
+                            .radio_button(ids!(add_room_button))
+                            .select(cx, scope),
+                        SelectedTab::Kanban => self
+                            .view
+                            .radio_button(ids!(kanban_button))
+                            .select(cx, scope),
+                        SelectedTab::Settings => self
+                            .view
+                            .radio_button(ids!(settings_button))
+                            .select(cx, scope),
                         SelectedTab::Space { .. } => {
                             for rb in radio_button_set.iter() {
                                 if let Some(mut rb_inner) = rb.borrow_mut() {
@@ -469,7 +514,6 @@ impl Widget for NavigationTabBar {
     }
 }
 
-
 /// Which top-level view is currently shown, and which navigation tab is selected.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum SelectedTab {
@@ -477,10 +521,12 @@ pub enum SelectedTab {
     Home,
     AddRoom,
     Settings,
+    Kanban,
     // AlertsInbox,
-    Space { space_name_id: RoomNameId },
+    Space {
+        space_name_id: RoomNameId,
+    },
 }
-
 
 /// Actions for navigating through the top-level views of the app,
 /// e.g., when the user clicks/taps on a button in the NavigationTabBar.
@@ -522,11 +568,12 @@ pub enum NavigationBarAction {
     CloseSettings,
     /// Go the space screen for the given space.
     GoToSpace { space_name_id: RoomNameId },
+    /// Go to Kanban board view.
+    GoToKanban,
 
     // TODO: add GoToAlertsInbox, once we add that button/screen
-
     /// The given tab was selected as the active top-level view.
-    /// This is needed to ensure that the proper tab is marked as selected. 
+    /// This is needed to ensure that the proper tab is marked as selected.
     TabSelected(SelectedTab),
     /// Toggle whether the SpacesBar is shown, i.e., show/hide it.
     /// This is only applicable in the Mobile view mode, because the SpacesBar
@@ -534,25 +581,22 @@ pub enum NavigationBarAction {
     ToggleSpacesBar,
 }
 
-
 /// Returns the current user's profile and avatar, if available.
 pub fn get_own_profile(cx: &mut Cx) -> Option<UserProfile> {
     let mut own_profile = None;
     if let Some(own_user_id) = current_user_id() {
-        let avatar_uri_to_fetch = user_profile_cache::with_user_profile(
-            cx,
-            own_user_id,
-            true,
-            |new_profile, _rooms| {
+        let avatar_uri_to_fetch =
+            user_profile_cache::with_user_profile(cx, own_user_id, true, |new_profile, _rooms| {
                 let avatar_uri_to_fetch = new_profile.avatar_state.uri().cloned();
                 own_profile = Some(new_profile.clone());
                 avatar_uri_to_fetch
-            },
-        );
+            });
         // If we have an avatar URI to fetch, try to fetch it.
         let mut new_profile_with_avatar = None;
         if let Some(Some(avatar_uri)) = avatar_uri_to_fetch {
-            if let AvatarCacheEntry::Loaded(data) = avatar_cache::get_or_fetch_avatar(cx, avatar_uri) {
+            if let AvatarCacheEntry::Loaded(data) =
+                avatar_cache::get_or_fetch_avatar(cx, avatar_uri)
+            {
                 if let Some(p) = own_profile.as_mut() {
                     p.avatar_state = AvatarState::Loaded(data);
                     new_profile_with_avatar = Some(p.clone());
@@ -561,9 +605,9 @@ pub fn get_own_profile(cx: &mut Cx) -> Option<UserProfile> {
         }
         // Update the user profile cache if we got new avatar data.
         if let Some(new_profile) = new_profile_with_avatar {
-            user_profile_cache::enqueue_user_profile_update(
-                UserProfileUpdate::UserProfileOnly(new_profile)
-            );
+            user_profile_cache::enqueue_user_profile_update(UserProfileUpdate::UserProfileOnly(
+                new_profile,
+            ));
         }
     }
 

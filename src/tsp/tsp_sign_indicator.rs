@@ -2,7 +2,10 @@
 
 use makepad_widgets::*;
 
-use crate::shared::{callout_tooltip::{CalloutTooltipOptions, TooltipAction}, styles::*};
+use crate::shared::{
+    callout_tooltip::{CalloutTooltipOptions, TooltipAction},
+    styles::*,
+};
 
 live_design! {
     link tsp_enabled
@@ -49,7 +52,6 @@ pub enum TspSignState {
     WrongSignature,
 }
 
-
 /// An indicator that is shown nearby a message that has a TSP signature.
 ///
 /// This widget is basically just a clickable icon group that shows
@@ -63,8 +65,10 @@ pub enum TspSignState {
 ///
 #[derive(Live, LiveHook, Widget)]
 pub struct TspSignIndicator {
-    #[deref] view: View,
-    #[rust] state: TspSignState,
+    #[deref]
+    view: View,
+    #[rust]
+    state: TspSignState,
 }
 
 impl Widget for TspSignIndicator {
@@ -95,7 +99,7 @@ impl Widget for TspSignIndicator {
                 ),
                 TspSignState::Verified => (
                     "This message was signed with the user's verified TSP identity.",
-                    COLOR_FG_ACCEPT_GREEN, 
+                    COLOR_FG_ACCEPT_GREEN,
                 ),
                 TspSignState::WrongSignature => (
                     "Warning: this message's TSP signature does NOT match the expected sender signature.",
@@ -128,15 +132,9 @@ impl TspSignIndicator {
         let tsp_html_ref = self.view.html(ids!(tsp_html));
         if let Some(mut tsp_html) = tsp_html_ref.borrow_mut() {
             let (text, font_color) = match state {
-                TspSignState::Unknown => {
-                    ("TSP ❔", COLOR_MESSAGE_NOTICE_TEXT)
-                }
-                TspSignState::Verified => {
-                    ("TSP ✅", COLOR_FG_ACCEPT_GREEN)
-                }
-                TspSignState::WrongSignature => {
-                    ("❗TSP❗", COLOR_FG_DANGER_RED)
-                }
+                TspSignState::Unknown => ("TSP ❔", COLOR_MESSAGE_NOTICE_TEXT),
+                TspSignState::Verified => ("TSP ✅", COLOR_FG_ACCEPT_GREEN),
+                TspSignState::WrongSignature => ("❗TSP❗", COLOR_FG_DANGER_RED),
             };
             tsp_html.set_text(cx, text);
             tsp_html.font_color = font_color;
@@ -155,7 +153,6 @@ impl TspSignIndicatorRef {
         }
     }
 }
-
 
 /// Actions emitted by an `TspSignIndicator` widget.
 #[derive(Clone, Debug, DefaultNone)]

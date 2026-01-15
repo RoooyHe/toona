@@ -225,18 +225,16 @@ impl ReactionList {
     }
 
     /// Deals with to any event/hit that triggers a hover-out action.
-    fn do_hover_out(
-        &self,
-        cx: &mut Cx,
-        scope: &mut Scope,
-        button_ref: &ButtonRef,
-    ) {
-        cx.widget_action(self.widget_uid(), &scope.path, RoomScreenTooltipActions::HoverOut);
+    fn do_hover_out(&self, cx: &mut Cx, scope: &mut Scope, button_ref: &ButtonRef) {
+        cx.widget_action(
+            self.widget_uid(),
+            &scope.path,
+            RoomScreenTooltipActions::HoverOut,
+        );
         button_ref.apply_over(cx, live!(draw_bg: {hover: 0.0}));
         cx.set_cursor(MouseCursor::Default);
     }
 }
-
 
 impl ReactionListRef {
     /// Set the list of reactions and their counts to display in the ReactionList widget,
@@ -292,11 +290,7 @@ impl ReactionListRef {
             let button = WidgetRef::new_from_ptr(cx, inner.item).as_button();
             button.set_text(
                 cx,
-                &format!(
-                    "{}  {}",
-                    reaction_data.reaction,
-                    reaction_senders.len()
-                ),
+                &format!("{}  {}", reaction_data.reaction, reaction_senders.len()),
             );
             let (bg_color, border_color) = if reaction_data.includes_user {
                 (EMOJI_BG_COLOR_INCLUDE_SELF, EMOJI_BORDER_COLOR_INCLUDE_SELF)

@@ -27,7 +27,7 @@ robius-location = { git = "https://github.com/project-robius/robius" }
 
 
 anyhow = "1.0"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.0.16", features = ["derive"] }
 crossbeam-channel = "0.5.10"
 crossbeam-queue = "0.3.8"
@@ -56,6 +56,9 @@ unicode-segmentation = "1.11.0"
 url = "2.5.0"
 bytesize = "2.0"
 bitflags = "2.6.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+dashmap = "6.0"
+lru = "0.16"
 indexmap = "2.6.0"
 blurhash = { version = "0.2.3", default-features = false }
 

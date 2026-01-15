@@ -25,7 +25,7 @@ live_design! {
                 instance highlight_color: (UNREAD_HIGHLIGHT_COLOR),
                 instance default_color: (UNREAD_DEFAULT_COLOR),
                 instance border_radius: 4.0
-                // Adjust this border_size to larger value to make oval smaller 
+                // Adjust this border_size to larger value to make oval smaller
                 instance border_size: 2.0
                 fn pixel(self) -> vec4 {
                     let sdf = Sdf2d::viewport(self.pos * self.rect_size)
@@ -56,12 +56,14 @@ live_design! {
     }
 }
 
-
 #[derive(Live, LiveHook, Widget)]
 pub struct UnreadBadge {
-    #[deref] view: View,
-    #[live] unread_mentions: u64,
-    #[live] unread_messages: u64,
+    #[deref]
+    view: View,
+    #[live]
+    unread_mentions: u64,
+    #[live]
+    unread_messages: u64,
 }
 
 impl Widget for UnreadBadge {
@@ -70,11 +72,10 @@ impl Widget for UnreadBadge {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-
         /// Helper function to format the badge's rounded rectangle.
         ///
         /// The rounded rectangle needs to be wider for longer text.
-        /// It also adds a plus sign at the end if the unread count is greater than 99. 
+        /// It also adds a plus sign at the end if the unread count is greater than 99.
         fn format_border_and_truncation(count: u64) -> (f64, &'static str) {
             let (border_size, plus_sign) = if count > 99 {
                 (0.0, "+")
@@ -89,30 +90,39 @@ impl Widget for UnreadBadge {
         // If there are unread mentions, show red badge and the number of unread mentions
         if self.unread_mentions > 0 {
             let (border_size, plus_sign) = format_border_and_truncation(self.unread_mentions);
-            self.label(ids!(label_count))
-                .set_text(cx, &format!("{}{plus_sign}", std::cmp::min(self.unread_mentions, 99)));
-            self.view(ids!(rounded_view)).apply_over(cx, live!{
-                draw_bg: {
-                    border_size: (border_size),
-                    highlight: 1.0
-                }
-            });
+            self.label(ids!(label_count)).set_text(
+                cx,
+                &format!("{}{plus_sign}", std::cmp::min(self.unread_mentions, 99)),
+            );
+            self.view(ids!(rounded_view)).apply_over(
+                cx,
+                live! {
+                    draw_bg: {
+                        border_size: (border_size),
+                        highlight: 1.0
+                    }
+                },
+            );
             self.visible = true;
         }
         // If there are no unread mentions but there are unread messages, show gray badge and the number of unread messages
         else if self.unread_messages > 0 {
             let (border_size, plus_sign) = format_border_and_truncation(self.unread_messages);
-            self.label(ids!(label_count))
-                .set_text(cx, &format!("{}{plus_sign}", std::cmp::min(self.unread_messages, 99)));
-            self.view(ids!(rounded_view)).apply_over(cx, live!{
-                draw_bg: {
-                    border_size: (border_size),
-                    highlight: 0.0
-                }
-            });
+            self.label(ids!(label_count)).set_text(
+                cx,
+                &format!("{}{plus_sign}", std::cmp::min(self.unread_messages, 99)),
+            );
+            self.view(ids!(rounded_view)).apply_over(
+                cx,
+                live! {
+                    draw_bg: {
+                        border_size: (border_size),
+                        highlight: 0.0
+                    }
+                },
+            );
             self.visible = true;
-        }
-        else {
+        } else {
             // If there are no unread mentions and no unread messages, hide the badge
             self.visible = false;
         }
