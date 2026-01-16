@@ -1,29 +1,31 @@
 [package]
 name = "toona"
 authors = [
-    "Kevin Boos <kevinaboos@gmail.com>",
+    "Roy He <hebaihua666@gmail.com>",
     "Robius Project Maintainers",
 ]
 description = "A Matrix chat client written using Makepad + Robius app dev framework in Rust."
-documentation = "https://docs.rs/robrix"
 edition = "2024"  ## mostly just to allow let-chains
-homepage = "https://robius.rs/"
 keywords = ["matrix", "chat", "client", "robrix", "robius"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/project-robius/robrix"
-version = "0.0.1-pre-alpha-4"
+repository = "https://atomgit.com/toona/toona"
+version = "0.0.1"
 metadata.makepad-auto-version = "zqpv-Yj-K7WNVK2I8h5Okhho46Q="
 
 [dependencies]
-makepad-widgets = { git = "https://github.com/kevinaboos/makepad", branch = "serde_optional", features = ["serde"] }
+makepad-widgets = { git = "https://gitcode.com/toona/makepad.git", branch = "serde_optional", features = ["serde"] }
+#makepad-widgets = { git = "https://github.com/kevinaboos/makepad", branch = "serde_optional", features = ["serde"] }
 # makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev", features = ["serde"] }
 
 ## Including this crate automatically configures all `robius-*` crates to work with Makepad.
 robius-use-makepad = "0.1.1"
-robius-open = { git = "https://github.com/project-robius/robius" }
-robius-directories = { git = "https://github.com/project-robius/robius" }
-robius-location = { git = "https://github.com/project-robius/robius" }
+robius-open = { git = "https://gitcode.com/toona/robius.git" }
+robius-directories = { git = "https://gitcode.com/toona/robius.git" }
+robius-location = { git = "https://gitcode.com/toona/robius.git" }
+#robius-open = { git = "https://github.com/project-robius/robius" }
+#robius-directories = { git = "https://github.com/project-robius/robius" }
+#robius-location = { git = "https://github.com/project-robius/robius" }
 
 
 anyhow = "1.0"
@@ -39,8 +41,8 @@ htmlize = "1.0.5"
 imghdr = "0.7.0"
 linkify = "0.10.0"
 matrix-sdk-base = { git = "https://github.com/matrix-org/matrix-rust-sdk", branch = "main" }
-matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", branch = "main", default-features = false, features = [ "e2e-encryption", "automatic-room-key-forwarding", "markdown", "sqlite", "rustls-tls", "bundled-sqlite", "sso-login" ] }
-matrix-sdk-ui = { git = "https://github.com/matrix-org/matrix-rust-sdk", branch = "main", default-features = false, features = [ "rustls-tls" ] }
+matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", branch = "main", default-features = false, features = ["e2e-encryption", "automatic-room-key-forwarding", "markdown", "sqlite", "rustls-tls", "bundled-sqlite", "sso-login"] }
+matrix-sdk-ui = { git = "https://github.com/matrix-org/matrix-rust-sdk", branch = "main", default-features = false, features = ["rustls-tls"] }
 # Enable the "compat-optional" feature to allow missing body field in m.room.tombstone event.
 ruma = { git = "https://github.com/ruma/ruma", rev = "15307f0eb361d7e04cfa33602fdffbf10c54a173", features = [
     "compat-optional",
@@ -116,7 +118,8 @@ log_space_service_diffs = []
 ## dependency to version 0.35.0, which is compatible with the version required by
 ## the matrix-sdk crate.
 ## See <https://github.com/launchbadge/sqlx/pull/3928/files#diff-4f4849707ed063bc5de6d9f6d105f0e7baf62d1085b3c8aee4a547468b89248fR57>
-sqlx = { git = "https://github.com/project-robius/sqlx.git", branch = "update_libsqlite3-sys_version" }
+sqlx = { git = "https://gitcode.com/toona/sqlx.git", branch = "update_libsqlite3-sys_version" }
+#sqlx = { git = "https://github.com/project-robius/sqlx.git", branch = "update_libsqlite3-sys_version" }
 
 ## The main branch of the `tsp_sdk` repo already includes this patch, so we copy it here.
 ## This is required for the askar repos to work with the above-patched `sqlx` crate.
@@ -136,7 +139,8 @@ askar-storage = { git = "https://github.com/openwallet-foundation/askar.git" }
 ## But that is a significant amount of work, so for now we just patch ruma-events.
 ##
 [patch."https://github.com/ruma/ruma"]
-ruma = { git = "https://github.com/project-robius/ruma.git", branch = "tsp"}
+ruma = { git = "https://gitcode.com/toona/ruma.git", branch = "tsp" }
+#ruma = { git = "https://github.com/project-robius/ruma.git", branch = "tsp" }
 
 
 [package.metadata.docs.rs]
@@ -157,7 +161,7 @@ lto = "thin"
 [profile.distribution]
 inherits = "release"
 codegen-units = 1
-lto = "fat" 
+lto = "fat"
 
 
 ## Configuration for `cargo packager`
@@ -219,7 +223,7 @@ section = "utils"
 
 [package.metadata.packager.macos]
 minimum_system_version = "11.0"
-frameworks = [ ]
+frameworks = []
 info_plist_path = "./packaging/Info.plist"
 entitlements = "./packaging/Entitlements.plist"
 signing_identity = "Developer ID Application: AppChef Inc. (SFVQ5V48GD)"
