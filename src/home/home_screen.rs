@@ -17,19 +17,20 @@ live_design! {
     use crate::home::search_messages::*;
     use crate::home::spaces_bar::*;
     use crate::home::add_room::*;
+    use crate::home::kanban_list_view::*;
+    use crate::home::kanban_card::*;
 
     use crate::shared::styles::*;
     use crate::shared::room_filter_input_bar::RoomFilterInputBar;
     use crate::home::main_desktop_ui::MainDesktopUI;
     use crate::settings::settings_screen::SettingsScreen;
 
-    use crate::kanban;
+
 
     StackNavigationWrapper = {{StackNavigationWrapper}} {
         view_stack = <StackNavigation> {}
     }
 
-    // A wrapper view around the SpacesBar that lets us show/hide it via animation.
     SpacesBarWrapper = {{SpacesBarWrapper}}<RoundedShadowView> {
         width: Fill,
         height: (NAVIGATION_TAB_BAR_SIZE)
@@ -41,7 +42,7 @@ live_design! {
             border_size: 0.0
             shadow_color: #0005
             shadow_radius: 15.0
-            shadow_offset: vec2(1.0, 0.0), //5.0,5.0)
+            shadow_offset: vec2(1.0, 0.0)
         }
 
         <CachedWidget> {
@@ -63,15 +64,8 @@ live_design! {
         }
     }
 
-    // The home screen widget contains the main content:
-    // rooms list, room screens, and the settings screen as an overlay.
-    // It adapts to both desktop and mobile layouts.
     pub HomeScreen = {{HomeScreen}} {
         <AdaptiveView> {
-            // NOTE: within each of these sub views, we used `CachedWidget` wrappers
-            //       to ensure that there is only a single global instance of each
-            //       of those widgets, which means they maintain their state
-            //       across transitions between the Desktop and Mobile variant.
             Desktop = {
                 show_bg: true
                 draw_bg: {
@@ -83,13 +77,10 @@ live_design! {
                 padding: 0,
                 margin: 0,
 
-                // On the left, show the navigation tab bar vertically.
                 <CachedWidget> {
                     navigation_tab_bar = <NavigationTabBar> {}
                 }
 
-                // To the right of that, we use the PageFlip widget to show either
-                // the main desktop UI or the settings screen.
                 home_screen_page_flip = <PageFlip> {
                     width: Fill, height: Fill
 
@@ -99,28 +90,6 @@ live_design! {
                     home_page = <View> {
                         width: Fill, height: Fill
                         flow: Down
-
-                        <View> {
-                            width: Fill,
-                            height: 39,
-                            flow: Right
-                            padding: {top: 2, bottom: 2}
-                            margin: {right: 2}
-                            spacing: 2
-                            align: {y: 0.5}
-
-                            <CachedWidget> {
-                                room_filter_input_bar = <RoomFilterInputBar> {}
-                            }
-
-                            search_messages_button = <SearchMessagesButton> {
-                                // make this button match/align with the RoomFilterInputBar
-                                height: 32.5,
-                                margin: {right: 2}
-                            }
-                        }
-
-                        <MainDesktopUI> {}
                     }
 
                     settings_page = <View> {
@@ -140,14 +109,62 @@ live_design! {
                         show_bg: true,
                         draw_bg: {
                             color: #F4F5F7
-                        }
+                        },
 
-                        // TODO: Implement KanbanApp when Makepad version is compatible
-                        placeholder = {
-                            text: "看板功能开发中...",
-                            draw_text: {
-                                text_style: <THEME_FONT_REGULAR>{font_size: 14.0}
-                                color: #666
+                        flow: Down,
+
+                        // 看板头部
+                        kanban_header = <BoardHeader> {}
+
+                        // 工具栏
+                        kanban_toolbar = <BoardToolbar> {}
+
+                        // 看板画布区域
+                        kanban_canvas = {
+                            width: Fill, height: Fill,
+                            scroll: {x: true, y: false},
+                            draw_bg: {
+                                color: #F4F5F7
+                            },
+
+                            kanban_board = {
+                                width: Fill, height: Fill,
+                                flow: Right,
+                                padding: 12,
+                                spacing: 12,
+                                align: {x: 0.0, y: 0.0},
+
+                                // 待办列表
+                                kanban_list_todo = <KanbanList> {}
+
+                                // 进行中列表
+                                kanban_list_progress = <KanbanList> {}
+
+                                // 已完成列表
+                                kanban_list_done = <KanbanList> {}
+
+                                // 添加新列表按钮
+                                add_list_button = <View> {
+                                    width: 272, height: Fit,
+                                    min_height: 100,
+                                    show_bg: true,
+                                    draw_bg: {
+                                        color: #FFFFFF99
+                                        border_radius: 3
+                                    },
+                                    align: {x: 0.0, y: 0.0},
+                                    padding: 8,
+                                    cursor: Pointer,
+
+                                    add_label = <Label> {
+                                        width: Fit, height: Fit,
+                                        draw_text: {
+                                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                            color: #5E6C84
+                                        },
+                                        text: "+ 添加另一个列表"
+                                    }
+                                }
                             }
                         }
                     }
@@ -183,8 +200,6 @@ live_design! {
                             flow: Down
                             width: Fill, height: Fill
 
-                            // At the top of the root view, we use the PageFlip widget to show either
-                            // the main list of rooms or the settings screen.
                             home_screen_page_flip = <PageFlip> {
                                 width: Fill, height: Fill
 
@@ -215,17 +230,10 @@ live_design! {
                                 }
                             }
 
-                            // Show the SpacesBar right above the navigation tab bar.
-                            // We wrap it in the SpacesBarWrapper in order to animate it in or out,
-                            // and wrap *that* in a CachedWidget in order to maintain its shown/hidden state
-                            // across AdaptiveView transitions between Mobile view mode and Desktop view mode.
-                            //
-                            // ... Then we wrap *that* in a ... <https://www.youtube.com/watch?v=evUWersr7pc>
                             <CachedWidget> {
                                 spaces_bar_wrapper = <SpacesBarWrapper> {}
                             }
 
-                            // At the bottom of the root view, show the navigation tab bar horizontally.
                             <CachedWidget> {
                                 navigation_tab_bar = <NavigationTabBar> {}
                             }
@@ -234,7 +242,7 @@ live_design! {
                         main_content_view = <StackNavigationView> {
                             width: Fill, height: Fill
                             header = {
-                                content = {
+                                content: {
                                     button_container = {
                                         padding: {left: 14}
                                     }
@@ -247,7 +255,7 @@ live_design! {
                                     }
                                 }
                             }
-                            body = {
+                            body: {
                                 main_content = <MainMobileUI> {}
                             }
                         }

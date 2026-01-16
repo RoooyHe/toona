@@ -216,6 +216,7 @@ impl LiveRegister for App {
         crate::join_leave_room_modal::live_design(cx);
         crate::verification_modal::live_design(cx);
         crate::home::live_design(cx);
+        crate::kanban::live_design(cx);
         crate::profile::live_design(cx);
         crate::login::live_design(cx);
         crate::logout::live_design(cx);
@@ -223,14 +224,14 @@ impl LiveRegister for App {
 }
 
 impl LiveHook for App {
-    fn after_update_from_doc(&mut self, cx: &mut Cx) {
-        self.update_login_visibility(cx);
-    }
-
     fn after_new_from_doc(&mut self, cx: &mut Cx) {
         // Here we set the global singleton for the PopupList widget,
         // which is used to access PopupList Widget from anywhere in the app.
         crate::shared::popup_list::set_global_popup_list(cx, &self.ui);
+    }
+
+    fn after_update_from_doc(&mut self, cx: &mut Cx) {
+        self.update_login_visibility(cx);
     }
 }
 

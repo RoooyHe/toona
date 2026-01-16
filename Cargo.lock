@@ -6295,6 +6295,7 @@ name = "toona"
 version = "0.0.1-pre-alpha-4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-lc-rs",
  "bitflags 2.9.4",
  "blurhash",
