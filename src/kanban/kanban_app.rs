@@ -1,13 +1,22 @@
 use makepad_widgets::*;
 use matrix_sdk::ruma::OwnedRoomId;
+
+use crate::{
+    app::AppState,
+    kanban::{KanbanActions, KanbanFilterState, KanbanSortState, SortDirection, SortField},
+};
 use crate::kanban::data::models::KanbanBoard;
 
 live_design! {
+
     use link::theme::*;
     use link::shaders::*;
     use link::widgets::*;
 
     use crate::shared::styles::*;
+    use crate::kanban::ui::components::boards_sidebar::BoardsSidebar;
+    use crate::kanban::ui::components::board_header::BoardHeader;
+    use crate::kanban::ui::components::board_toolbar::BoardToolbar;
 
     pub KanbanApp = {{KanbanApp}} {
         width: Fill, height: Fill
@@ -17,7 +26,7 @@ live_design! {
         sidebar = <BoardsSidebar> {}
 
         // 主内容区域
-        main_content = {
+        main_content = <View> {
             width: Fill, height: Fill
             flow: Down
 
@@ -28,15 +37,16 @@ live_design! {
             board_toolbar = <BoardToolbar> {}
 
             // 看板画布
-            board_canvas = {
+            board_canvas = <View> {
                 width: Fill, height: Fill
                 flow: Right
-                scroll: {x: true, y: false}
+                scroll: vec2(1.0, 0.0)
+
                 padding: 12
                 spacing: 12
 
                 // 列表容器
-                lists_container = {
+                lists_container = <View> {
                     width: Fill, height: Fit
                     flow: Right
                     spacing: 8
@@ -175,12 +185,106 @@ impl KanbanApp {
     }
 }
 
+impl KanbanApp {
+    fn sync_from_state(&mut self, cx: &mut Cx, app_state: &AppState) {
+        self.current_board_id = app_state.kanban_state.current_board_id.clone();
+        self.current_board = app_state.kanban_state.current_board().cloned();
+        self.boards = app_state.kanban_state.boards.values().cloned().collect();
+
+        let board_title = self
+            .current_board
+            .as_ref()
+            .map(|board| board.name.as_str())
+            .unwrap_or("未选择看板");
+        self.view
+            .label(ids!(main_content.board_header.title_area.board_title))
+            .set_text(cx, board_title);
+    }
+}
+
 impl Widget for KanbanApp {
-    fn handle_event(&mut self, cx: &mut Cx, event: &Event, _scope: &mut Scope) {
-        self.view.handle_event(cx, event, _scope);
+    fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
+        if let Event::Actions(actions) = event {
+            if self
+                .view
+                .button(ids!(sidebar.sidebar_header.add_board_button))
+                .clicked(actions)
+            {
+                cx.action(KanbanActions::CreateBoard {
+                    name: "新建看板".to_string(),
+                    description: None,
+                });
+            }
+
+            if self
+                .view
+                .button(ids!(main_content.board_header.action_buttons.filter_button))
+                .clicked(actions)
+                || self
+                    .view
+                    .button(ids!(main_content.board_toolbar.filter_button))
+                    .clicked(actions)
+            {
+                cx.action(KanbanActions::SetFilter(KanbanFilterState {
+                    keyword: None,
+                    label_ids: Vec::new(),
+                    member_ids: Vec::new(),
+                    due_date: None,
+                }));
+            }
+
+            if self
+                .view
+                .button(ids!(main_content.board_header.action_buttons.sort_button))
+                .clicked(actions)
+                || self
+                    .view
+                    .button(ids!(main_content.board_toolbar.sort_button))
+                    .clicked(actions)
+            {
+                cx.action(KanbanActions::SetSort(KanbanSortState {
+                    field: SortField::Position,
+                    direction: SortDirection::Ascending,
+                }));
+            }
+
+            let search_input = self.view.text_input(ids!(
+                main_content.board_toolbar.search_container.search_input
+            ));
+            if let Some(query) = search_input.changed(actions) {
+                if let Some(board_id) = self.current_board_id.clone() {
+                    cx.action(KanbanActions::Search { board_id, query });
+                }
+            }
+
+            if self
+                .view
+                .button(ids!(main_content.board_toolbar.view_toggle.board_view_btn))
+                .clicked(actions)
+            {
+                self.view_mode = KanbanViewMode::Board;
+            }
+
+            if self
+                .view
+                .button(ids!(main_content.board_toolbar.view_toggle.list_view_btn))
+                .clicked(actions)
+            {
+                self.view_mode = KanbanViewMode::Table;
+            }
+        }
+
+        if let Some(app_state) = scope.data.get::<AppState>() {
+            self.sync_from_state(cx, app_state);
+        }
+
+        self.view.handle_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
+        if let Some(app_state) = scope.data.get::<AppState>() {
+            self.sync_from_state(cx, app_state);
+        }
         self.view.draw_walk(cx, scope, walk)
     }
 }

@@ -13,7 +13,12 @@ use crate::kanban::data::models::{KanbanBoard, KanbanList, KanbanCard, CardDueDa
 pub trait BoardRepositoryTrait {
     async fn create_board(&self, name: &str, description: Option<&str>) -> Result<KanbanBoard>;
     async fn get_board(&self, client: &Client, room_id: &RoomId) -> Result<KanbanBoard>;
-    async fn update_board(&self, client: &Client, room_id: &RoomId, updates: BoardUpdateRequest) -> Result<()>;
+    async fn update_board(
+        &self,
+        client: &Client,
+        room_id: &RoomId,
+        updates: BoardUpdateRequest,
+    ) -> Result<()>;
     async fn delete_board(&self, client: &Client, room_id: &RoomId) -> Result<()>;
     async fn get_boards(&self, client: &Client) -> Result<Vec<KanbanBoard>>;
 }
@@ -22,7 +27,12 @@ pub trait BoardRepositoryTrait {
 #[async_trait::async_trait]
 pub trait ListRepositoryTrait {
     async fn create_list(&self, board_id: &RoomId, name: &str) -> Result<KanbanList>;
-    async fn update_list(&self, board_id: &RoomId, list_id: &str, updates: ListUpdateRequest) -> Result<()>;
+    async fn update_list(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        updates: ListUpdateRequest,
+    ) -> Result<()>;
     async fn delete_list(&self, board_id: &RoomId, list_id: &str) -> Result<()>;
     async fn move_list(&self, board_id: &RoomId, list_id: &str, new_position: f64) -> Result<()>;
 }
@@ -30,10 +40,26 @@ pub trait ListRepositoryTrait {
 /// 卡片仓储 trait
 #[async_trait::async_trait]
 pub trait CardRepositoryTrait {
-    async fn create_card(&self, board_id: &RoomId, list_id: &str, title: &str) -> Result<KanbanCard>;
-    async fn update_card(&self, board_id: &RoomId, card_id: &str, updates: CardUpdateRequest) -> Result<()>;
+    async fn create_card(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        title: &str,
+    ) -> Result<KanbanCard>;
+    async fn update_card(
+        &self,
+        board_id: &RoomId,
+        card_id: &str,
+        updates: CardUpdateRequest,
+    ) -> Result<()>;
     async fn delete_card(&self, board_id: &RoomId, card_id: &str) -> Result<()>;
-    async fn move_card(&self, board_id: &RoomId, card_id: &str, to_list_id: &str, new_position: f64) -> Result<()>;
+    async fn move_card(
+        &self,
+        board_id: &RoomId,
+        card_id: &str,
+        to_list_id: &str,
+        new_position: f64,
+    ) -> Result<()>;
     async fn get_cards(&self, board_id: &RoomId, list_id: &str) -> Result<Vec<KanbanCard>>;
 }
 
@@ -113,7 +139,12 @@ impl BoardRepositoryTrait for MatrixBoardRepository {
         Ok(board)
     }
 
-    async fn update_board(&self, client: &Client, room_id: &RoomId, updates: BoardUpdateRequest) -> Result<()> {
+    async fn update_board(
+        &self,
+        client: &Client,
+        room_id: &RoomId,
+        updates: BoardUpdateRequest,
+    ) -> Result<()> {
         // TODO: 实现实际的 Matrix SDK 调用
         // - 更新名称使用 set_room_name
         // - 更新描述使用 set_room_topic
@@ -181,9 +212,17 @@ impl ListRepositoryTrait for MatrixListRepository {
         Ok(list)
     }
 
-    async fn update_list(&self, board_id: &RoomId, list_id: &str, updates: ListUpdateRequest) -> Result<()> {
+    async fn update_list(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        updates: ListUpdateRequest,
+    ) -> Result<()> {
         let mut lists = self.local_lists.lock().await;
-        if let Some(list) = lists.iter_mut().find(|l| l.id == list_id && &l.board_id == board_id) {
+        if let Some(list) = lists
+            .iter_mut()
+            .find(|l| l.id == list_id && &l.board_id == board_id)
+        {
             if let Some(name) = updates.name {
                 list.name = name;
                 list.updated_at = chrono::Utc::now().to_rfc3339();
@@ -203,7 +242,10 @@ impl ListRepositoryTrait for MatrixListRepository {
 
     async fn move_list(&self, board_id: &RoomId, list_id: &str, new_position: f64) -> Result<()> {
         let mut lists = self.local_lists.lock().await;
-        if let Some(list) = lists.iter_mut().find(|l| l.id == list_id && &l.board_id == board_id) {
+        if let Some(list) = lists
+            .iter_mut()
+            .find(|l| l.id == list_id && &l.board_id == board_id)
+        {
             list.position = new_position;
             list.updated_at = chrono::Utc::now().to_rfc3339();
         }
@@ -233,16 +275,29 @@ impl Default for MatrixCardRepository {
 
 #[async_trait::async_trait]
 impl CardRepositoryTrait for MatrixCardRepository {
-    async fn create_card(&self, board_id: &RoomId, list_id: &str, title: &str) -> Result<KanbanCard> {
+    async fn create_card(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        title: &str,
+    ) -> Result<KanbanCard> {
         let card = KanbanCard::new(title, list_id.to_string(), board_id.to_owned());
         let mut cards = self.local_cards.lock().await;
         cards.push(card.clone());
         Ok(card)
     }
 
-    async fn update_card(&self, board_id: &RoomId, card_id: &str, updates: CardUpdateRequest) -> Result<()> {
+    async fn update_card(
+        &self,
+        board_id: &RoomId,
+        card_id: &str,
+        updates: CardUpdateRequest,
+    ) -> Result<()> {
         let mut cards = self.local_cards.lock().await;
-        if let Some(card) = cards.iter_mut().find(|c| c.id == card_id && &c.board_id == board_id) {
+        if let Some(card) = cards
+            .iter_mut()
+            .find(|c| c.id == card_id && &c.board_id == board_id)
+        {
             if let Some(title) = updates.title {
                 card.title = title;
             }
@@ -275,9 +330,18 @@ impl CardRepositoryTrait for MatrixCardRepository {
         Ok(())
     }
 
-    async fn move_card(&self, board_id: &RoomId, card_id: &str, to_list_id: &str, new_position: f64) -> Result<()> {
+    async fn move_card(
+        &self,
+        board_id: &RoomId,
+        card_id: &str,
+        to_list_id: &str,
+        new_position: f64,
+    ) -> Result<()> {
         let mut cards = self.local_cards.lock().await;
-        if let Some(card) = cards.iter_mut().find(|c| c.id == card_id && &c.board_id == board_id) {
+        if let Some(card) = cards
+            .iter_mut()
+            .find(|c| c.id == card_id && &c.board_id == board_id)
+        {
             card.list_id = to_list_id.to_string();
             card.position = new_position;
             card.updated_at = chrono::Utc::now().to_rfc3339();

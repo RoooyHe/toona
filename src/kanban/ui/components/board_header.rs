@@ -17,7 +17,8 @@ live_design! {
         padding: 12,
 
         // 看板标题区域
-        title_area = {
+        title_area = <View> {
+
             flow: Right,
             width: Fit, height: Fit,
             spacing: 8,
@@ -49,7 +50,8 @@ live_design! {
         }
 
         // 右侧操作按钮
-        action_buttons = {
+        action_buttons = <View> {
+
             flow: Right,
             width: Fit, height: Fit,
             margin: {left: 16},

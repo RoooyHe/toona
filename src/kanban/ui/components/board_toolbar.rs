@@ -8,7 +8,7 @@ live_design! {
     use crate::shared::styles::*;
 
     // 看板工具栏组件
-    pub BoardToolbar = {{BoardToolbar}} {
+    pub BoardToolbar = {{BoardToolbar}} <View> {
         flow: Right,
         width: Fill,
         height: 40,
@@ -22,48 +22,11 @@ live_design! {
         filter_button = <Button> {
             width: Fit, height: 32,
             padding: 8,
-            show_bg: true,
-            draw_bg: {
-                color: #FFFFFF
-                border_radius: 3
-                border_size: 1
-                border_color: #DFE1E6
-            },
-            draw_text: {
-                text_style: <THEME_FONT_REGULAR>{font_size: 13}
-                color: #5E6C84
-            },
-            text: "筛选"
-        }
 
-        // 排序按钮
-        sort_button = <Button> {
-            width: Fit, height: 32,
-            padding: 8,
-            show_bg: true,
             draw_bg: {
                 color: #FFFFFF
                 border_radius: 3
-                border_size: 1
-                border_color: #DFE1E6
-            },
-            draw_text: {
-                text_style: <THEME_FONT_REGULAR>{font_size: 13}
-                color: #5E6C84
-            },
-            text: "排序"
-        }
-
-        // 搜索框容器
-        search_container = {
-            width: 180, height: 32,
-            flow: Right,
-            margin: {left: 8},
-            show_bg: true,
-            draw_bg: {
-                color: #FFFFFF
-                border_radius: 3
-                border_size: 1
+                border_size: 1.0
                 border_color: #DFE1E6
             },
             padding: 4,
@@ -79,7 +42,7 @@ live_design! {
         }
 
         // 视图切换
-        view_toggle = {
+        view_toggle = <View> {
             width: Fit, height: 32,
             flow: Right,
             margin: {left: 8},
@@ -87,7 +50,6 @@ live_design! {
 
             board_view_btn = <Button> {
                 width: 32, height: 32,
-                show_bg: true,
                 draw_bg: { color: #FFFFFF },
                 draw_text: { color: #5E6C84 },
                 text: "▦"
@@ -95,7 +57,6 @@ live_design! {
 
             list_view_btn = <Button> {
                 width: 32, height: 32,
-                show_bg: true,
                 draw_bg: { color: #EBECF0 },
                 draw_text: { color: #5E6C84 },
                 text: "☰"
@@ -107,11 +68,10 @@ live_design! {
             width: Fit, height: 32,
             padding: 8,
             margin: {left: 8},
-            show_bg: true,
             draw_bg: {
                 color: #FFFFFF
                 border_radius: 3
-                border_size: 1
+                border_size: 1.0
                 border_color: #DFE1E6
             },
             draw_text: {
@@ -124,11 +84,10 @@ live_design! {
         // 更多按钮
         more_button = <Button> {
             width: 32, height: 32,
-            show_bg: true,
             draw_bg: {
                 color: #FFFFFF
                 border_radius: 3
-                border_size: 1
+                border_size: 1.0
                 border_color: #DFE1E6
             },
             draw_text: {
@@ -138,6 +97,7 @@ live_design! {
             text: "..."
         }
     }
+
 }
 
 #[derive(Live, LiveHook, Widget)]
@@ -239,7 +199,7 @@ impl BoardToolbar {
 pub enum BoardViewMode {
     #[default]
     Board, // 看板视图
-    List,  // 列表视图
+    List, // 列表视图
 }
 
 impl Widget for BoardToolbar {

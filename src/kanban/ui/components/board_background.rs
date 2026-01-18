@@ -21,7 +21,8 @@ live_design! {
             width: Fill,
             height: 56,
             align: {x: 0.5, y: 0.5},
-            border_bottom: 1, #DFE1E6,
+            border_bottom: 1.0,
+            border_color: #DFE1E6,
             padding: 16,
 
             header_title = <Label> {

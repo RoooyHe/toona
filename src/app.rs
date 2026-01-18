@@ -17,6 +17,9 @@ use crate::{
     join_leave_room_modal::{
         JoinLeaveModalKind, JoinLeaveRoomModalAction, JoinLeaveRoomModalWidgetRefExt,
     },
+    kanban::{
+        KanbanActions, KanbanAppState, KanbanBoard, KanbanCard, KanbanFilterState, KanbanList,
+    },
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
         LogoutAction, LogoutConfirmModalAction, LogoutConfirmModalWidgetRefExt,
@@ -41,6 +44,7 @@ use matrix_sdk::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 live_design! {
     use link::theme::*;
@@ -270,6 +274,12 @@ impl MatchEvent for App {
         }
 
         for action in actions {
+            if let Some(kanban_action) = action.downcast_ref::<KanbanActions>() {
+                self.handle_kanban_action(cx, kanban_action.clone());
+                self.ui.redraw(cx);
+                continue;
+            }
+
             if let Some(logout_modal_action) = action.downcast_ref::<LogoutConfirmModalAction>() {
                 match logout_modal_action {
                     LogoutConfirmModalAction::Open => {
@@ -714,6 +724,248 @@ impl App {
             closure(cx);
         }
     }
+
+    fn handle_kanban_action(&mut self, _cx: &mut Cx, action: KanbanActions) {
+        let state = &mut self.app_state.kanban_state;
+        match action {
+            KanbanActions::LoadBoards => {
+                if state.boards.is_empty() {
+                    let board = Self::seed_board(state, "示例看板", None);
+                    state.current_board_id = Some(board.id.clone());
+                }
+            }
+            KanbanActions::SelectBoard(board_id) => {
+                if state.boards.contains_key(&board_id) {
+                    state.current_board_id = Some(board_id);
+                }
+            }
+            KanbanActions::CreateBoard { name, description } => {
+                let board = Self::seed_board(state, &name, description.clone());
+                state.current_board_id = Some(board.id.clone());
+            }
+
+            KanbanActions::UpdateBoard { board_id, updates } => {
+                if let Some(board) = state.boards.get_mut(&board_id) {
+                    if let Some(name) = updates.name {
+                        board.name = name;
+                    }
+                    if let Some(description) = updates.description {
+                        board.description = description;
+                    }
+                    if let Some(background_color) = updates.background_color {
+                        board.background_color = background_color;
+                    }
+                    if let Some(background_image) = updates.background_image {
+                        board.background_image = background_image;
+                    }
+                    board.updated_at = chrono::Utc::now().to_rfc3339();
+                }
+            }
+            KanbanActions::DeleteBoard { board_id } => {
+                if let Some(board) = state.boards.remove(&board_id) {
+                    for list_id in board.list_ids {
+                        if let Some(list) = state.lists.remove(&list_id) {
+                            for card_id in list.card_ids {
+                                state.cards.remove(&card_id);
+                            }
+                        }
+                    }
+                    if state.current_board_id.as_ref() == Some(&board_id) {
+                        state.current_board_id = None;
+                    }
+                }
+            }
+            KanbanActions::LoadLists { .. } | KanbanActions::LoadCards { .. } => {}
+            KanbanActions::CreateList { board_id, name } => {
+                if let Some(board) = state.boards.get_mut(&board_id) {
+                    let list = KanbanList::new(&name, board_id.clone());
+                    board.list_ids.push(list.id.clone());
+                    state.lists.insert(list.id.clone(), list);
+                    board.updated_at = chrono::Utc::now().to_rfc3339();
+                }
+            }
+            KanbanActions::UpdateList {
+                board_id,
+                list_id,
+                updates,
+            } => {
+                if state.boards.contains_key(&board_id) {
+                    if let Some(list) = state.lists.get_mut(&list_id) {
+                        if let Some(name) = updates.name {
+                            list.name = name;
+                        }
+                        if let Some(archived) = updates.archived {
+                            list.is_archived = archived;
+                        }
+                        list.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+            KanbanActions::DeleteList { board_id, list_id } => {
+                if let Some(board) = state.boards.get_mut(&board_id) {
+                    board.list_ids.retain(|id| id != &list_id);
+                    if let Some(list) = state.lists.remove(&list_id) {
+                        for card_id in list.card_ids {
+                            state.cards.remove(&card_id);
+                        }
+                    }
+                    board.updated_at = chrono::Utc::now().to_rfc3339();
+                }
+            }
+            KanbanActions::MoveList {
+                board_id,
+                list_id,
+                new_position,
+            } => {
+                if let Some(list) = state.lists.get_mut(&list_id) {
+                    if list.board_id == board_id {
+                        list.position = new_position;
+                        list.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+            KanbanActions::CreateCard {
+                board_id,
+                list_id,
+                name,
+            } => {
+                if let Some(list) = state.lists.get_mut(&list_id) {
+                    if list.board_id == board_id {
+                        let card = KanbanCard::new(&name, list_id.clone(), board_id.clone());
+                        list.card_ids.push(card.id.clone());
+                        state.cards.insert(card.id.clone(), card);
+                        list.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+            KanbanActions::UpdateCard {
+                board_id,
+                card_id,
+                updates,
+            } => {
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if card.board_id == board_id {
+                        if let Some(title) = updates.title {
+                            card.title = title;
+                        }
+                        if let Some(description) = updates.description {
+                            card.description = description;
+                        }
+                        if let Some(label_ids) = updates.label_ids {
+                            card.label_ids = label_ids;
+                        }
+                        if let Some(member_ids) = updates.member_ids {
+                            card.member_ids = member_ids;
+                        }
+                        if let Some(due_date) = updates.due_date {
+                            card.due_date = due_date;
+                        }
+                        if let Some(is_starred) = updates.is_starred {
+                            card.is_starred = is_starred;
+                        }
+                        if let Some(archived) = updates.archived {
+                            card.is_archived = archived;
+                        }
+                        card.updated_at = chrono::Utc::now().to_rfc3339();
+                    }
+                }
+            }
+            KanbanActions::DeleteCard { board_id, card_id } => {
+                if let Some(card) = state.cards.remove(&card_id) {
+                    if card.board_id == board_id {
+                        if let Some(list) = state.lists.get_mut(&card.list_id) {
+                            list.card_ids.retain(|id| id != &card_id);
+                            list.updated_at = chrono::Utc::now().to_rfc3339();
+                        }
+                    }
+                }
+            }
+            KanbanActions::MoveCard {
+                board_id,
+                card_id,
+                from_list,
+                to_list,
+                new_position,
+            } => {
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if card.board_id == board_id {
+                        card.list_id = to_list.clone();
+                        card.position = new_position;
+                        card.updated_at = chrono::Utc::now().to_rfc3339();
+                        if let Some(list) = state.lists.get_mut(&from_list) {
+                            list.card_ids.retain(|id| id != &card_id);
+                        }
+                        if let Some(list) = state.lists.get_mut(&to_list) {
+                            if !list.card_ids.contains(&card_id) {
+                                list.card_ids.push(card_id.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            KanbanActions::ArchiveCard {
+                board_id,
+                card_id,
+                archived,
+            } => {
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if card.board_id == board_id {
+                        card.is_archived = archived;
+                    }
+                }
+            }
+            KanbanActions::SetFilter(filter) => {
+                state.filter_state = Some(filter);
+            }
+            KanbanActions::SetSort(sort) => {
+                state.sort_state = Some(sort);
+            }
+            KanbanActions::Search { board_id, query } => {
+                if state.current_board_id.as_ref() == Some(&board_id) {
+                    state.filter_state = Some(KanbanFilterState {
+                        keyword: Some(query),
+                        label_ids: Vec::new(),
+                        member_ids: Vec::new(),
+                        due_date: None,
+                    });
+                }
+            }
+            KanbanActions::Error(message) => {
+                state.error = Some(message);
+            }
+            KanbanActions::Loading(loading) => {
+                state.loading = loading;
+            }
+        }
+    }
+
+    fn seed_board(
+        state: &mut KanbanAppState,
+        name: &str,
+        description: Option<String>,
+    ) -> KanbanBoard {
+        let board_id = Self::create_local_board_id();
+        let mut board = KanbanBoard::new(name);
+        board.id = board_id.clone();
+        board.description = description;
+
+        let todo = KanbanList::new("待办", board_id.clone());
+        let doing = KanbanList::new("进行中", board_id.clone());
+        let done = KanbanList::new("已完成", board_id.clone());
+
+        board.list_ids = vec![todo.id.clone(), doing.id.clone(), done.id.clone()];
+        state.lists.insert(todo.id.clone(), todo);
+        state.lists.insert(doing.id.clone(), doing);
+        state.lists.insert(done.id.clone(), done);
+        state.boards.insert(board_id, board.clone());
+        board
+    }
+
+    fn create_local_board_id() -> OwnedRoomId {
+        let room_id = format!("!kanban-{}:local", Uuid::new_v4());
+        OwnedRoomId::try_from(room_id)
+            .unwrap_or_else(|_| OwnedRoomId::try_from("!kanban:local").expect("fallback board id"))
+    }
 }
 
 /// App-wide state that is stored persistently across multiple app runs
@@ -739,6 +991,9 @@ pub struct AppState {
     pub saved_dock_state_per_space: HashMap<OwnedRoomId, SavedDockState>,
     /// Whether a user is currently logged in to Robrix or not.
     pub logged_in: bool,
+    /// Kanban module state (not persisted).
+    #[serde(skip)]
+    pub kanban_state: KanbanAppState,
 }
 
 /// A snapshot of the main dock: all state needed to restore the dock tabs/layout.

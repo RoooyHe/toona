@@ -3,6 +3,7 @@ use makepad_widgets::*;
 use crate::{
     app::AppState,
     home::navigation_tab_bar::{NavigationBarAction, SelectedTab},
+    kanban::KanbanActions,
     settings::settings_screen::SettingsScreenWidgetRefExt,
 };
 
@@ -17,14 +18,11 @@ live_design! {
     use crate::home::search_messages::*;
     use crate::home::spaces_bar::*;
     use crate::home::add_room::*;
-    use crate::home::kanban_list_view::*;
-    use crate::home::kanban_card::*;
-
+    use crate::kanban::kanban_app::KanbanApp;
     use crate::shared::styles::*;
     use crate::shared::room_filter_input_bar::RoomFilterInputBar;
     use crate::home::main_desktop_ui::MainDesktopUI;
     use crate::settings::settings_screen::SettingsScreen;
-
 
 
     StackNavigationWrapper = {{StackNavigationWrapper}} {
@@ -113,59 +111,8 @@ live_design! {
 
                         flow: Down,
 
-                        // 看板头部
-                        kanban_header = <BoardHeader> {}
-
-                        // 工具栏
-                        kanban_toolbar = <BoardToolbar> {}
-
-                        // 看板画布区域
-                        kanban_canvas = {
-                            width: Fill, height: Fill,
-                            scroll: {x: true, y: false},
-                            draw_bg: {
-                                color: #F4F5F7
-                            },
-
-                            kanban_board = {
-                                width: Fill, height: Fill,
-                                flow: Right,
-                                padding: 12,
-                                spacing: 12,
-                                align: {x: 0.0, y: 0.0},
-
-                                // 待办列表
-                                kanban_list_todo = <KanbanList> {}
-
-                                // 进行中列表
-                                kanban_list_progress = <KanbanList> {}
-
-                                // 已完成列表
-                                kanban_list_done = <KanbanList> {}
-
-                                // 添加新列表按钮
-                                add_list_button = <View> {
-                                    width: 272, height: Fit,
-                                    min_height: 100,
-                                    show_bg: true,
-                                    draw_bg: {
-                                        color: #FFFFFF99
-                                        border_radius: 3
-                                    },
-                                    align: {x: 0.0, y: 0.0},
-                                    padding: 8,
-                                    cursor: Pointer,
-
-                                    add_label = <Label> {
-                                        width: Fit, height: Fit,
-                                        draw_text: {
-                                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                                            color: #5E6C84
-                                        },
-                                        text: "+ 添加另一个列表"
-                                    }
-                                }
-                            }
+                        kanban_app = <KanbanApp> {
+                            width: Fill, height: Fill
                         }
                     }
 
@@ -402,6 +349,7 @@ impl Widget for HomeScreen {
                             self.previous_selection = app_state.selected_tab.clone();
                             app_state.selected_tab = SelectedTab::Kanban;
                             cx.action(NavigationBarAction::TabSelected(SelectedTab::Kanban));
+                            cx.action(KanbanActions::LoadBoards);
                             self.update_active_page_from_selection(cx, app_state);
                             self.view.redraw(cx);
                         }

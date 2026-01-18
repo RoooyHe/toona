@@ -12,13 +12,14 @@ live_design! {
         show_bg: true,
         draw_bg: { color: #FFFFFF },
 
-        sidebar_header = {
+        sidebar_header = <View> {
             flow: Right,
             width: Fill,
             height: 48,
             align: {x: 0.0, y: 0.5},
             padding: 12,
-            border_bottom: 1, #DFE1E6,
+            border_bottom: 1.0,
+            border_color: #DFE1E6,
 
             header_title = <Label> {
                 width: Fill, height: Fit,
@@ -39,7 +40,7 @@ live_design! {
             }
         }
 
-        boards_list = {
+        boards_list = <View> {
             flow: Down,
             width: Fill,
             height: Fill,
@@ -47,12 +48,13 @@ live_design! {
             spacing: 4,
         }
 
-        sidebar_footer = {
+        sidebar_footer = <View> {
             flow: Down,
             width: Fill,
             height: Fit,
             padding: 12,
-            border_top: 1, #DFE1E6,
+            border_top: 1.0,
+            border_color: #DFE1E6,
 
             settings_button = <Button> {
                 width: Fill, height: 32,

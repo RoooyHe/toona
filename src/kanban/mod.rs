@@ -17,6 +17,6 @@ pub use state::kanban_state::*;
 pub use state::kanban_actions::*;
 
 pub fn live_design(cx: &mut Cx) {
-    kanban_app::live_design(cx);
     ui::live_design(cx);
+    kanban_app::live_design(cx);
 }
