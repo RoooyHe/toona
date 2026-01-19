@@ -3,9 +3,9 @@
 //! 提供高级别的看板操作 API，封装数据层与 Matrix SDK 的交互
 
 use crate::kanban::data::repositories::{
-    BoardRepositoryTrait, ListRepositoryTrait, CardRepositoryTrait,
-    MatrixBoardRepository, MatrixListRepository, MatrixCardRepository,
-    BoardUpdateRequest, ListUpdateRequest, CardUpdateRequest,
+    BoardRepositoryTrait, ListRepositoryTrait, CardRepositoryTrait, MatrixBoardRepository,
+    MatrixListRepository, MatrixCardRepository, BoardUpdateRequest, ListUpdateRequest,
+    CardUpdateRequest,
 };
 use crate::kanban::data::models::{KanbanBoard, KanbanList, KanbanCard};
 use matrix_sdk::{ruma::RoomId, Client};
@@ -29,8 +29,15 @@ impl KanbanApi {
     }
 
     /// 创建看板
-    pub async fn create_board(&self, client: &Client, name: &str, description: Option<&str>) -> Result<KanbanBoard> {
-        self.board_repository.create_board(client, name, description).await
+    pub async fn create_board(
+        &self,
+        client: &Client,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<KanbanBoard> {
+        self.board_repository
+            .create_board(client, name, description)
+            .await
     }
 
     /// 获取看板
@@ -39,8 +46,15 @@ impl KanbanApi {
     }
 
     /// 更新看板
-    pub async fn update_board(&self, client: &Client, room_id: &RoomId, updates: BoardUpdateRequest) -> Result<()> {
-        self.board_repository.update_board(client, room_id, updates).await
+    pub async fn update_board(
+        &self,
+        client: &Client,
+        room_id: &RoomId,
+        updates: BoardUpdateRequest,
+    ) -> Result<()> {
+        self.board_repository
+            .update_board(client, room_id, updates)
+            .await
     }
 
     /// 删除看板
@@ -59,8 +73,15 @@ impl KanbanApi {
     }
 
     /// 更新列表
-    pub async fn update_list(&self, board_id: &RoomId, list_id: &str, updates: ListUpdateRequest) -> Result<()> {
-        self.list_repository.update_list(board_id, list_id, updates).await
+    pub async fn update_list(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        updates: ListUpdateRequest,
+    ) -> Result<()> {
+        self.list_repository
+            .update_list(board_id, list_id, updates)
+            .await
     }
 
     /// 删除列表
@@ -69,18 +90,41 @@ impl KanbanApi {
     }
 
     /// 移动列表
-    pub async fn move_list(&self, board_id: &RoomId, list_id: &str, new_position: f64) -> Result<()> {
-        self.list_repository.move_list(board_id, list_id, new_position).await
+    pub async fn move_list(
+        &self,
+        board_id: &RoomId,
+        list_id: &str,
+        new_position: f64,
+    ) -> Result<()> {
+        self.list_repository
+            .move_list(board_id, list_id, new_position)
+            .await
     }
 
     /// 创建卡片
-    pub async fn create_card(&self, client: &Client, board_id: &RoomId, list_id: &str, title: &str) -> Result<KanbanCard> {
-        self.card_repository.create_card(client, board_id, list_id, title).await
+    pub async fn create_card(
+        &self,
+        client: &Client,
+        board_id: &RoomId,
+        list_id: &str,
+        title: &str,
+    ) -> Result<KanbanCard> {
+        self.card_repository
+            .create_card(client, board_id, list_id, title)
+            .await
     }
 
     /// 更新卡片
-    pub async fn update_card(&self, client: &Client, board_id: &RoomId, card_id: &str, updates: CardUpdateRequest) -> Result<()> {
-        self.card_repository.update_card(client, board_id, card_id, updates).await
+    pub async fn update_card(
+        &self,
+        client: &Client,
+        board_id: &RoomId,
+        card_id: &str,
+        updates: CardUpdateRequest,
+    ) -> Result<()> {
+        self.card_repository
+            .update_card(client, board_id, card_id, updates)
+            .await
     }
 
     /// 删除卡片
@@ -89,8 +133,16 @@ impl KanbanApi {
     }
 
     /// 移动卡片
-    pub async fn move_card(&self, board_id: &RoomId, card_id: &str, to_list_id: &str, new_position: f64) -> Result<()> {
-        self.card_repository.move_card(board_id, card_id, to_list_id, new_position).await
+    pub async fn move_card(
+        &self,
+        board_id: &RoomId,
+        card_id: &str,
+        to_list_id: &str,
+        new_position: f64,
+    ) -> Result<()> {
+        self.card_repository
+            .move_card(board_id, card_id, to_list_id, new_position)
+            .await
     }
 
     /// 获取卡片列表

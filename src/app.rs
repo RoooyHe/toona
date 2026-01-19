@@ -949,14 +949,30 @@ impl App {
         board.id = board_id.clone();
         board.description = description;
 
-        let todo = KanbanList::new("待办", board_id.clone());
-        let doing = KanbanList::new("进行中", board_id.clone());
-        let done = KanbanList::new("已完成", board_id.clone());
+        let mut todo = KanbanList::new("待办", board_id.clone());
+        let mut doing = KanbanList::new("进行中", board_id.clone());
+        let mut done = KanbanList::new("已完成", board_id.clone());
+
+        let triage = KanbanCard::new("整理需求", todo.id.clone(), board_id.clone());
+        let ux = KanbanCard::new("UI 结构草图", todo.id.clone(), board_id.clone());
+        todo.card_ids = vec![triage.id.clone(), ux.id.clone()];
+
+        let api = KanbanCard::new("接口联调", doing.id.clone(), board_id.clone());
+        let polish = KanbanCard::new("交互动效", doing.id.clone(), board_id.clone());
+        doing.card_ids = vec![api.id.clone(), polish.id.clone()];
+
+        let release = KanbanCard::new("提测上线", done.id.clone(), board_id.clone());
+        done.card_ids = vec![release.id.clone()];
 
         board.list_ids = vec![todo.id.clone(), doing.id.clone(), done.id.clone()];
         state.lists.insert(todo.id.clone(), todo);
         state.lists.insert(doing.id.clone(), doing);
         state.lists.insert(done.id.clone(), done);
+        state.cards.insert(triage.id.clone(), triage);
+        state.cards.insert(ux.id.clone(), ux);
+        state.cards.insert(api.id.clone(), api);
+        state.cards.insert(polish.id.clone(), polish);
+        state.cards.insert(release.id.clone(), release);
         state.boards.insert(board_id, board.clone());
         board
     }

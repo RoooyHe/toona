@@ -12,7 +12,12 @@ use crate::kanban::data::models::{KanbanBoard, KanbanList, KanbanCard, CardDueDa
 /// 看板仓储 trait
 #[async_trait::async_trait]
 pub trait BoardRepositoryTrait {
-    async fn create_board(&self, client: &Client, name: &str, description: Option<&str>) -> Result<KanbanBoard>;
+    async fn create_board(
+        &self,
+        client: &Client,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<KanbanBoard>;
     async fn get_board(&self, client: &Client, room_id: &RoomId) -> Result<KanbanBoard>;
     async fn update_board(
         &self,
@@ -116,11 +121,17 @@ impl Default for MatrixBoardRepository {
 
 #[async_trait::async_trait]
 impl BoardRepositoryTrait for MatrixBoardRepository {
-    async fn create_board(&self, _client: &Client, name: &str, description: Option<&str>) -> Result<KanbanBoard> {
+    async fn create_board(
+        &self,
+        _client: &Client,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<KanbanBoard> {
         // 生成占位 Room ID (实际项目中需要从 Matrix SDK 创建房间后获取)
         let room_id = format!("!kanban-{}:local", uuid::Uuid::new_v4());
-        let room_id = matrix_sdk::ruma::OwnedRoomId::try_from(room_id)
-            .unwrap_or_else(|_| matrix_sdk::ruma::OwnedRoomId::try_from("!kanban:local").expect("fallback board id"));
+        let room_id = matrix_sdk::ruma::OwnedRoomId::try_from(room_id).unwrap_or_else(|_| {
+            matrix_sdk::ruma::OwnedRoomId::try_from("!kanban:local").expect("fallback board id")
+        });
 
         let board = KanbanBoard {
             id: room_id.clone(),
@@ -135,7 +146,11 @@ impl BoardRepositoryTrait for MatrixBoardRepository {
 
         // TODO: 实际创建 Matrix 房间
         // 需要使用 MatrixRequest 提交创建房间请求
-        log!("Creating board '{}' with description: {:?}", name, description);
+        log!(
+            "Creating board '{}' with description: {:?}",
+            name,
+            description
+        );
 
         Ok(board)
     }

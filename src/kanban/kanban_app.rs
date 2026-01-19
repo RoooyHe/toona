@@ -17,6 +17,8 @@ live_design! {
     use crate::kanban::ui::components::boards_sidebar::BoardsSidebar;
     use crate::kanban::ui::components::board_header::BoardHeader;
     use crate::kanban::ui::components::board_toolbar::BoardToolbar;
+    use crate::kanban::ui::components::kanban_list::KanbanList;
+    use crate::kanban::ui::components::kanban_card::KanbanCard;
 
     pub KanbanApp = {{KanbanApp}} {
         width: Fill, height: Fill
@@ -51,6 +53,41 @@ live_design! {
                     flow: Right
                     spacing: 8
                     align: {x: 0.0, y: 0.0}
+
+                    list_todo = <KanbanList> {
+                        header = {
+                            list_title = { text: "待办" }
+                            card_count = { text: "2" }
+                        }
+                        cards_container = {
+                            card_1 = <KanbanCard> { card_title = { text: "整理需求" } }
+                            card_2 = <KanbanCard> { card_title = { text: "UI 结构草图" } }
+                        }
+                        add_card_area = { visible: false }
+                    }
+
+                    list_doing = <KanbanList> {
+                        header = {
+                            list_title = { text: "进行中" }
+                            card_count = { text: "2" }
+                        }
+                        cards_container = {
+                            card_1 = <KanbanCard> { card_title = { text: "接口联调" } }
+                            card_2 = <KanbanCard> { card_title = { text: "交互动效" } }
+                        }
+                        add_card_area = { visible: false }
+                    }
+
+                    list_done = <KanbanList> {
+                        header = {
+                            list_title = { text: "已完成" }
+                            card_count = { text: "1" }
+                        }
+                        cards_container = {
+                            card_1 = <KanbanCard> { card_title = { text: "提测上线" } }
+                        }
+                        add_card_area = { visible: false }
+                    }
                 }
             }
         }
