@@ -1,0 +1,9 @@
+{
+  "name": "rust-skills",
+  "version": "1.0.0",
+  "description": "Comprehensive Rust development assistant",
+  "main": "instructions.md",
+  "author": "CoRust",
+  "license": "MIT",
+  "repository": "https://github.com/ZhangHanDong/rust-skills"
+}

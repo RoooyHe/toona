@@ -2,6 +2,7 @@
 //!
 //! 实现与 Matrix SDK 的交互，提供看板、列表、卡片的数据操作
 
+use makepad_widgets::log;
 use matrix_sdk::{ruma::RoomId, Client};
 use anyhow::{Result, anyhow};
 use std::sync::Arc;
@@ -11,7 +12,7 @@ use crate::kanban::data::models::{KanbanBoard, KanbanList, KanbanCard, CardDueDa
 /// 看板仓储 trait
 #[async_trait::async_trait]
 pub trait BoardRepositoryTrait {
-    async fn create_board(&self, name: &str, description: Option<&str>) -> Result<KanbanBoard>;
+    async fn create_board(&self, client: &Client, name: &str, description: Option<&str>) -> Result<KanbanBoard>;
     async fn get_board(&self, client: &Client, room_id: &RoomId) -> Result<KanbanBoard>;
     async fn update_board(
         &self,
@@ -42,12 +43,14 @@ pub trait ListRepositoryTrait {
 pub trait CardRepositoryTrait {
     async fn create_card(
         &self,
+        client: &Client,
         board_id: &RoomId,
         list_id: &str,
         title: &str,
     ) -> Result<KanbanCard>;
     async fn update_card(
         &self,
+        client: &Client,
         board_id: &RoomId,
         card_id: &str,
         updates: CardUpdateRequest,
@@ -113,10 +116,27 @@ impl Default for MatrixBoardRepository {
 
 #[async_trait::async_trait]
 impl BoardRepositoryTrait for MatrixBoardRepository {
-    async fn create_board(&self, name: &str, description: Option<&str>) -> Result<KanbanBoard> {
-        let board = KanbanBoard::new(name);
+    async fn create_board(&self, _client: &Client, name: &str, description: Option<&str>) -> Result<KanbanBoard> {
+        // 生成占位 Room ID (实际项目中需要从 Matrix SDK 创建房间后获取)
+        let room_id = format!("!kanban-{}:local", uuid::Uuid::new_v4());
+        let room_id = matrix_sdk::ruma::OwnedRoomId::try_from(room_id)
+            .unwrap_or_else(|_| matrix_sdk::ruma::OwnedRoomId::try_from("!kanban:local").expect("fallback board id"));
+
+        let board = KanbanBoard {
+            id: room_id.clone(),
+            name: name.to_string(),
+            description: description.map(|s| s.to_string()),
+            ..Default::default()
+        };
+
+        // 保存到本地存储
         let mut boards = self.local_boards.lock().await;
         boards.push(board.clone());
+
+        // TODO: 实际创建 Matrix 房间
+        // 需要使用 MatrixRequest 提交创建房间请求
+        log!("Creating board '{}' with description: {:?}", name, description);
+
         Ok(board)
     }
 
@@ -141,14 +161,32 @@ impl BoardRepositoryTrait for MatrixBoardRepository {
 
     async fn update_board(
         &self,
-        client: &Client,
-        room_id: &RoomId,
+        _client: &Client,
+        _room_id: &RoomId,
         updates: BoardUpdateRequest,
     ) -> Result<()> {
-        // TODO: 实现实际的 Matrix SDK 调用
-        // - 更新名称使用 set_room_name
-        // - 更新描述使用 set_room_topic
-        // - 更新背景颜色需要发送状态事件
+        let _room = _client
+            .get_room(_room_id)
+            .ok_or_else(|| anyhow!("Room not found: {}", _room_id))?;
+
+        // 更新房间名称
+        if let Some(name) = updates.name {
+            // 使用 Matrix SDK 更新房间名称
+            // 注意：Matrix SDK 的 Room 类型可能需要使用不同的方法
+            // 这里使用占位实现，实际项目中需要根据 SDK 版本调整
+            log!("Updating room name to: {}", name);
+            // TODO: 使用 room.set_name() 或发送状态事件更新房间名称
+        }
+
+        // 更新房间描述
+        if let Some(description) = updates.description {
+            log!("Updating room topic to: {:?}", description);
+            // TODO: 使用 room.set_topic() 或发送状态事件更新房间描述
+        }
+
+        // 更新背景颜色需要发送状态事件 (m.room.encryption 等)
+        // TODO: 背景颜色更新需要发送自定义状态事件
+
         Ok(())
     }
 
@@ -277,22 +315,48 @@ impl Default for MatrixCardRepository {
 impl CardRepositoryTrait for MatrixCardRepository {
     async fn create_card(
         &self,
+        client: &Client,
         board_id: &RoomId,
         list_id: &str,
         title: &str,
     ) -> Result<KanbanCard> {
-        let card = KanbanCard::new(title, list_id.to_string(), board_id.to_owned());
+        let _room = client
+            .get_room(board_id)
+            .ok_or_else(|| anyhow!("Room not found: {}", board_id))?;
+
+        // 卡片事件 ID (使用 UUID 作为占位，实际项目中需要从 Matrix 事件获取)
+        let card_id = uuid::Uuid::new_v4().to_string();
+
+        let card = KanbanCard {
+            id: card_id.clone(),
+            title: title.to_string(),
+            list_id: list_id.to_string(),
+            board_id: board_id.to_owned(),
+            ..Default::default()
+        };
+
         let mut cards = self.local_cards.lock().await;
         cards.push(card.clone());
+
+        // TODO: 实际发送消息到 Matrix 房间
+        // 需要使用 MatrixRequest 提交消息发送请求
+        log!("Created card '{}' in board {}", title, board_id);
+
         Ok(card)
     }
 
     async fn update_card(
         &self,
+        client: &Client,
         board_id: &RoomId,
         card_id: &str,
         updates: CardUpdateRequest,
     ) -> Result<()> {
+        let _room = client
+            .get_room(board_id)
+            .ok_or_else(|| anyhow!("Room not found: {}", board_id))?;
+
+        // 更新本地卡片数据
         let mut cards = self.local_cards.lock().await;
         if let Some(card) = cards
             .iter_mut()
@@ -320,6 +384,10 @@ impl CardRepositoryTrait for MatrixCardRepository {
                 card.is_archived = archived;
             }
             card.updated_at = chrono::Utc::now().to_rfc3339();
+
+            // TODO: 实际更新 Matrix 房间中的消息
+            // 需要使用 MatrixRequest 提交消息编辑请求
+            log!("Updated card '{}' in board {}", card_id, board_id);
         }
         Ok(())
     }

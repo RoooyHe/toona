@@ -26,15 +26,13 @@ live_design! {
             // 看板图标
             board_icon = <View> {
                 width: 24, height: 24,
-                show_bg: true,
                 draw_bg: {
                     color: #0079BF
-                    border_radius: 4
                 },
                 align: {x: 0.5, y: 0.5},
                 icon = <Label> {
                     text: "📋"
-                    draw_text: { font_size: 14 }
+                    draw_text: { text_style: { font_size: 14 } }
                 }
             }
 

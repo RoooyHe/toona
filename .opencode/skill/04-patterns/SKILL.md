@@ -30,16 +30,29 @@ Proven patterns for building robust Makepad applications.
 | [Theme Switching](_base/11-theme-switching.md) | Dynamic theming |
 | [Local Persistence](_base/12-local-persistence.md) | File-based storage |
 
+## Layout Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| [Dock-Based Studio Layout](_base/15-dock-studio-layout.md) | IDE/studio layouts with resizable panels |
+| [Row-Based Grid Layout](_base/17-row-based-grid-layout.md) | Dynamic grids with variable columns per row |
+| [Drag-Drop Reorder](_base/18-drag-drop-reorder.md) | Drag-and-drop widget reordering with visual preview |
+
 ## Advanced Patterns
 
 | Pattern | Description |
 |---------|-------------|
 | [Tokio Integration](_base/13-tokio-integration.md) | Async runtime architecture |
 | [Callout Tooltip](_base/14-callout-tooltip.md) | Context-aware tooltips |
+| [Hover Effect](_base/16-hover-effect.md) | Reliable hover states with instance variables |
 
 ## Community Patterns
 
-See [community/](community/) for community-contributed patterns.
+| Pattern | Description |
+|---------|-------------|
+| [Custom 3D Widget](community/custom-3d-widget.md) | Reusable widget with custom GPU rendering (DrawMesh, geometry) |
+
+See [community/](community/) for more community-contributed patterns.
 
 To contribute your own pattern, use the template at [99-evolution/templates/pattern-template.md](../99-evolution/templates/pattern-template.md).
 
@@ -62,6 +75,19 @@ To contribute your own pattern, use the template at [99-evolution/templates/patt
 - **Large lists**: Use [List Template](_base/04-list-template.md)
 - **Heavy views**: Use [LRU View Cache](_base/05-lru-view-cache.md)
 - **Background work**: Use [Tokio Integration](_base/13-tokio-integration.md)
+
+### For Layouts
+
+- **IDE/studio with resizable panels**: Use [Dock-Based Studio Layout](_base/15-dock-studio-layout.md)
+- **Grid with variable columns per row**: Use [Row-Based Grid Layout](_base/17-row-based-grid-layout.md)
+- **Drag-to-reorder widgets**: Use [Drag-Drop Reorder](_base/18-drag-drop-reorder.md)
+- **Simple fixed grid**: Use View with `flow: Down` and nested `flow: Right` rows
+
+### For Custom Rendering
+
+- **3D widgets**: Use [Custom 3D Widget](community/custom-3d-widget.md)
+- **Custom geometry**: Create GeometryFields implementation with unique instance_id
+- **Multiple meshes**: Use template pattern to share shaders across DrawMesh instances
 
 ## References
 

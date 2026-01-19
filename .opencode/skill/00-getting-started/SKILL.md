@@ -35,7 +35,7 @@ cd my_app
 
 # Add Makepad dependencies to Cargo.toml
 [dependencies]
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
 
 # Run
 cargo run

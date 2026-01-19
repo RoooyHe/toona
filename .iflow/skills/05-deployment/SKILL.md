@@ -259,7 +259,7 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
 
 [profile.release]
 opt-level = 3

@@ -40,7 +40,7 @@ description = "A Makepad application"
 license = "MIT"
 
 [dependencies]
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
 ```
 
 ### src/main.rs
@@ -189,7 +189,7 @@ authors = ["Your Name <your@email.com>"]
 repository = "https://github.com/yourusername/my-app"
 
 [dependencies]
-makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "rik" }
+makepad-widgets = { git = "https://github.com/makepad/makepad", branch = "dev" }
 
 # Cross-platform utilities (optional)
 # robius-use-makepad = "0.1.1"
@@ -558,7 +558,7 @@ live_design! {
 When initializing a new project, ensure:
 
 - [ ] `Cargo.toml` has correct package metadata
-- [ ] `makepad-widgets` dependency uses correct branch (`rik` or `dev`)
+- [ ] `makepad-widgets` dependency uses correct branch (`dev`)
 - [ ] `lib.rs` re-exports `makepad_widgets`
 - [ ] `main.rs` calls `app::app_main()`
 - [ ] `LiveRegister` registers all module's `live_design(cx)`

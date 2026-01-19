@@ -9,7 +9,6 @@ live_design! {
         flow: Down,
         width: 272,
         height: Fill,
-        show_bg: true,
         draw_bg: { color: #FFFFFF },
 
         sidebar_header = <View> {
@@ -18,8 +17,7 @@ live_design! {
             height: 48,
             align: {x: 0.0, y: 0.5},
             padding: 12,
-            border_bottom: 1.0,
-            border_color: #DFE1E6,
+            draw_bg: { color: #F8F9FA }
 
             header_title = <Label> {
                 width: Fill, height: Fit,
@@ -53,14 +51,12 @@ live_design! {
             width: Fill,
             height: Fit,
             padding: 12,
-            border_top: 1.0,
-            border_color: #DFE1E6,
+            draw_bg: { color: #F8F9FA }
 
             settings_button = <Button> {
                 width: Fill, height: 32,
                 padding: 8,
-                show_bg: true,
-                draw_bg: { color: #FFFFFF, border_radius: 3 },
+                draw_bg: { color: #FFFFFF },
                 draw_text: {
                     text_style: <THEME_FONT_REGULAR>{font_size: 13}
                     color: #5E6C84
@@ -71,8 +67,7 @@ live_design! {
             archived_button = <Button> {
                 width: Fill, height: 32,
                 padding: 8,
-                show_bg: true,
-                draw_bg: { color: #FFFFFF, border_radius: 3 },
+                draw_bg: { color: #FFFFFF },
                 draw_text: {
                     text_style: <THEME_FONT_REGULAR>{font_size: 13}
                     color: #5E6C84
@@ -90,13 +85,11 @@ live_design! {
         padding: 8,
         spacing: 8,
         cursor: Pointer,
-        show_bg: true,
-        draw_bg: { color: #FFFFFF, border_radius: 3 },
+        draw_bg: { color: #FFFFFF },
 
         board_icon = <View> {
             width: 20, height: 20,
-            show_bg: true,
-            draw_bg: { color: #0079BF, border_radius: 3 }
+            draw_bg: { color: #0079BF }
         }
 
         board_name = <Label> {
@@ -110,7 +103,6 @@ live_design! {
 
         selected_indicator = <View> {
             width: 4, height: 20,
-            show_bg: true,
             draw_bg: { color: #0079BF },
             visible: false,
         }
