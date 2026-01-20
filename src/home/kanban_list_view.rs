@@ -1,5 +1,7 @@
 use makepad_widgets::*;
 
+use crate::home::kanban_card::KanbanCardWidgetExt;
+
 live_design! {
     use link::theme::*;
     use link::shaders::*;
@@ -8,7 +10,7 @@ live_design! {
     use crate::shared::styles::*;
     use crate::home::kanban_card::KanbanCard;
 
-    pub KanbanListView = <View> {
+    pub KanbanListView = {{KanbanListView}} {
         width: 280, height: Fill
         flow: Down
         show_bg: true
@@ -40,13 +42,19 @@ live_design! {
             spacing: 8
             padding: 8
 
-            card_1 = <KanbanCard> {}
-            card_2 = <KanbanCard> {}
-            card_3 = <KanbanCard> {}
-            card_4 = <KanbanCard> {}
-            card_5 = <KanbanCard> {}
+            card_1 = <KanbanCard> { visible: false }
+            card_2 = <KanbanCard> { visible: false }
+            card_3 = <KanbanCard> { visible: false }
+            card_4 = <KanbanCard> { visible: false }
+            card_5 = <KanbanCard> { visible: false }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct KanbanCardSummary {
+    pub id: String,
+    pub title: String,
 }
 
 #[derive(Live, LiveHook, Widget)]
@@ -62,5 +70,53 @@ impl Widget for KanbanListView {
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         self.view.draw_walk(cx, scope, walk)
+    }
+}
+
+impl KanbanListView {
+    fn set_list(
+        &mut self,
+        cx: &mut Cx,
+        title: &str,
+        cards: &[KanbanCardSummary],
+        selected_card_id: Option<&str>,
+    ) {
+        self.view
+            .label(ids!(list_header.list_title))
+            .set_text(cx, title);
+
+        let card_slots = [
+            ids!(cards_container.card_1),
+            ids!(cards_container.card_2),
+            ids!(cards_container.card_3),
+            ids!(cards_container.card_4),
+            ids!(cards_container.card_5),
+        ];
+
+        for (slot_index, slot_id) in card_slots.iter().enumerate() {
+            let card_ref = self.view.kanban_card(*slot_id);
+            if let Some(card) = cards.get(slot_index) {
+                let is_selected = selected_card_id == Some(card.id.as_str());
+                card_ref.set_visible(cx, true);
+                card_ref.set_card(cx, &card.id, &card.title, is_selected);
+            } else {
+                card_ref.set_visible(cx, false);
+            }
+        }
+    }
+}
+
+impl KanbanListViewRef {
+    pub fn set_list(
+        &self,
+        cx: &mut Cx,
+        title: &str,
+        cards: &[KanbanCardSummary],
+        selected_card_id: Option<&str>,
+    ) {
+        let Some(mut inner) = self.borrow_mut() else {
+            return;
+        };
+        inner.set_list(cx, title, cards, selected_card_id);
     }
 }

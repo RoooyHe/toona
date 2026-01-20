@@ -2,10 +2,15 @@ use makepad_widgets::*;
 
 use crate::{
     app::AppState,
-    home::navigation_tab_bar::{NavigationBarAction, SelectedTab},
+    home::{
+        kanban_card::KanbanCardAction,
+        kanban_list_view::KanbanCardSummary,
+        navigation_tab_bar::{NavigationBarAction, SelectedTab},
+    },
     kanban::KanbanActions,
     settings::settings_screen::SettingsScreenWidgetRefExt,
 };
+use crate::home::kanban_list_view::KanbanListViewWidgetExt;
 
 live_design! {
     use link::theme::*;
@@ -284,6 +289,8 @@ pub struct HomeScreen {
     previous_selection: SelectedTab,
     #[rust]
     is_spaces_bar_shown: bool,
+    #[rust]
+    selected_kanban_card_id: Option<String>,
 }
 
 impl Widget for HomeScreen {
@@ -291,91 +298,104 @@ impl Widget for HomeScreen {
         if let Event::Actions(actions) = event {
             let app_state = scope.data.get_mut::<AppState>().unwrap();
             for action in actions {
-                match action.downcast_ref() {
-                    Some(NavigationBarAction::GoToHome) => {
-                        if !matches!(app_state.selected_tab, SelectedTab::Home) {
-                            self.previous_selection = app_state.selected_tab.clone();
-                            app_state.selected_tab = SelectedTab::Home;
-                            cx.action(NavigationBarAction::TabSelected(
-                                app_state.selected_tab.clone(),
-                            ));
-                            self.update_active_page_from_selection(cx, app_state);
-                            self.view.redraw(cx);
-                        }
-                    }
-                    Some(NavigationBarAction::GoToAddRoom) => {
-                        if !matches!(app_state.selected_tab, SelectedTab::AddRoom) {
-                            self.previous_selection = app_state.selected_tab.clone();
-                            app_state.selected_tab = SelectedTab::AddRoom;
-                            cx.action(NavigationBarAction::TabSelected(
-                                app_state.selected_tab.clone(),
-                            ));
-                            self.update_active_page_from_selection(cx, app_state);
-                            self.view.redraw(cx);
-                        }
-                    }
-                    Some(NavigationBarAction::GoToSpace { space_name_id }) => {
-                        let new_space_selection = SelectedTab::Space {
-                            space_name_id: space_name_id.clone(),
-                        };
-                        if app_state.selected_tab != new_space_selection {
-                            self.previous_selection = app_state.selected_tab.clone();
-                            app_state.selected_tab = new_space_selection;
-                            cx.action(NavigationBarAction::TabSelected(
-                                app_state.selected_tab.clone(),
-                            ));
-                            self.update_active_page_from_selection(cx, app_state);
-                            self.view.redraw(cx);
-                        }
-                    }
-                    // Only open the settings screen if it is not currently open.
-                    Some(NavigationBarAction::OpenSettings) => {
-                        if !matches!(app_state.selected_tab, SelectedTab::Settings) {
-                            self.previous_selection = app_state.selected_tab.clone();
-                            app_state.selected_tab = SelectedTab::Settings;
-                            cx.action(NavigationBarAction::TabSelected(
-                                app_state.selected_tab.clone(),
-                            ));
-                            if let Some(settings_page) =
-                                self.update_active_page_from_selection(cx, app_state)
-                            {
-                                settings_page
-                                    .settings_screen(ids!(settings_screen))
-                                    .populate(cx, None);
+                if let Some(nav_action) = action.downcast_ref::<NavigationBarAction>() {
+                    match nav_action {
+                        NavigationBarAction::GoToHome => {
+                            if !matches!(app_state.selected_tab, SelectedTab::Home) {
+                                self.previous_selection = app_state.selected_tab.clone();
+                                app_state.selected_tab = SelectedTab::Home;
+                                cx.action(NavigationBarAction::TabSelected(
+                                    app_state.selected_tab.clone(),
+                                ));
+                                self.update_active_page_from_selection(cx, app_state);
                                 self.view.redraw(cx);
-                            } else {
-                                error!("BUG: failed to set active page to show settings screen.");
                             }
                         }
+                        NavigationBarAction::GoToAddRoom => {
+                            if !matches!(app_state.selected_tab, SelectedTab::AddRoom) {
+                                self.previous_selection = app_state.selected_tab.clone();
+                                app_state.selected_tab = SelectedTab::AddRoom;
+                                cx.action(NavigationBarAction::TabSelected(
+                                    app_state.selected_tab.clone(),
+                                ));
+                                self.update_active_page_from_selection(cx, app_state);
+                                self.view.redraw(cx);
+                            }
+                        }
+                        NavigationBarAction::GoToSpace { space_name_id } => {
+                            let new_space_selection = SelectedTab::Space {
+                                space_name_id: space_name_id.clone(),
+                            };
+                            if app_state.selected_tab != new_space_selection {
+                                self.previous_selection = app_state.selected_tab.clone();
+                                app_state.selected_tab = new_space_selection;
+                                cx.action(NavigationBarAction::TabSelected(
+                                    app_state.selected_tab.clone(),
+                                ));
+                                self.update_active_page_from_selection(cx, app_state);
+                                self.view.redraw(cx);
+                            }
+                        }
+                        // Only open the settings screen if it is not currently open.
+                        NavigationBarAction::OpenSettings => {
+                            if !matches!(app_state.selected_tab, SelectedTab::Settings) {
+                                self.previous_selection = app_state.selected_tab.clone();
+                                app_state.selected_tab = SelectedTab::Settings;
+                                cx.action(NavigationBarAction::TabSelected(
+                                    app_state.selected_tab.clone(),
+                                ));
+                                if let Some(settings_page) =
+                                    self.update_active_page_from_selection(cx, app_state)
+                                {
+                                    settings_page
+                                        .settings_screen(ids!(settings_screen))
+                                        .populate(cx, None);
+                                    self.view.redraw(cx);
+                                } else {
+                                    error!(
+                                        "BUG: failed to set active page to show settings screen."
+                                    );
+                                }
+                            }
+                        }
+                        NavigationBarAction::CloseSettings => {
+                            if matches!(app_state.selected_tab, SelectedTab::Settings) {
+                                app_state.selected_tab = self.previous_selection.clone();
+                                cx.action(NavigationBarAction::TabSelected(
+                                    app_state.selected_tab.clone(),
+                                ));
+                                self.update_active_page_from_selection(cx, app_state);
+                                self.view.redraw(cx);
+                            }
+                        }
+                        NavigationBarAction::GoToKanban => {
+                            if !matches!(app_state.selected_tab, SelectedTab::Kanban) {
+                                self.previous_selection = app_state.selected_tab.clone();
+                                app_state.selected_tab = SelectedTab::Kanban;
+                                cx.action(NavigationBarAction::TabSelected(SelectedTab::Kanban));
+                                cx.action(KanbanActions::LoadBoards);
+                                self.update_active_page_from_selection(cx, app_state);
+                                self.view.redraw(cx);
+                            }
+                        }
+                        NavigationBarAction::ToggleSpacesBar => {
+                            self.is_spaces_bar_shown = !self.is_spaces_bar_shown;
+                            self.view
+                                .spaces_bar_wrapper(ids!(spaces_bar_wrapper))
+                                .show_or_hide(cx, self.is_spaces_bar_shown);
+                        }
+                        NavigationBarAction::TabSelected(_) => {}
                     }
-                    Some(NavigationBarAction::CloseSettings) => {
-                        if matches!(app_state.selected_tab, SelectedTab::Settings) {
-                            app_state.selected_tab = self.previous_selection.clone();
-                            cx.action(NavigationBarAction::TabSelected(
-                                app_state.selected_tab.clone(),
-                            ));
-                            self.update_active_page_from_selection(cx, app_state);
+                }
+
+                if let Some(card_action) = action.downcast_ref::<KanbanCardAction>() {
+                    match card_action {
+                        KanbanCardAction::Clicked { card_id } => {
+                            self.selected_kanban_card_id = Some(card_id.clone());
                             self.view.redraw(cx);
                         }
+                        KanbanCardAction::None => {}
                     }
-                    Some(NavigationBarAction::GoToKanban) => {
-                        if !matches!(app_state.selected_tab, SelectedTab::Kanban) {
-                            self.previous_selection = app_state.selected_tab.clone();
-                            app_state.selected_tab = SelectedTab::Kanban;
-                            cx.action(NavigationBarAction::TabSelected(SelectedTab::Kanban));
-                            cx.action(KanbanActions::LoadBoards);
-                            self.update_active_page_from_selection(cx, app_state);
-                            self.view.redraw(cx);
-                        }
-                    }
-                    Some(NavigationBarAction::ToggleSpacesBar) => {
-                        self.is_spaces_bar_shown = !self.is_spaces_bar_shown;
-                        self.view
-                            .spaces_bar_wrapper(ids!(spaces_bar_wrapper))
-                            .show_or_hide(cx, self.is_spaces_bar_shown);
-                    }
-                    // We're the ones who emitted this action, so we don't need to handle it again.
-                    Some(NavigationBarAction::TabSelected(_)) | None => {}
                 }
             }
         }
@@ -390,12 +410,44 @@ impl Widget for HomeScreen {
         // the PageFlip widget will have been reset to its default,
         // so we must re-set it to the correct page based on `app_state.selected_tab`.
         self.update_active_page_from_selection(cx, app_state);
+        if matches!(app_state.selected_tab, SelectedTab::Kanban) {
+            self.sync_kanban_lists(cx, app_state);
+        }
 
         self.view.draw_walk(cx, scope, walk)
     }
 }
 
 impl HomeScreen {
+    fn sync_kanban_lists(&mut self, cx: &mut Cx, app_state: &AppState) {
+        let list_views = [
+            self.view.kanban_list_view(ids!(kanban_list_todo)),
+            self.view.kanban_list_view(ids!(kanban_list_doing)),
+            self.view.kanban_list_view(ids!(kanban_list_done)),
+        ];
+        let lists = app_state.kanban_state.current_board_lists();
+        let selected_card_id = self.selected_kanban_card_id.as_deref();
+
+        for (list_index, list_view) in list_views.iter().enumerate() {
+            if let Some(list) = lists.get(list_index) {
+                let cards = app_state
+                    .kanban_state
+                    .list_cards(&list.id)
+                    .iter()
+                    .map(|card| KanbanCardSummary {
+                        id: card.id.clone(),
+                        title: card.title.clone(),
+                    })
+                    .collect::<Vec<_>>();
+
+                list_view.set_visible(cx, true);
+                list_view.set_list(cx, &list.name, &cards, selected_card_id);
+            } else {
+                list_view.set_visible(cx, false);
+            }
+        }
+    }
+
     fn update_active_page_from_selection(
         &mut self,
         cx: &mut Cx,

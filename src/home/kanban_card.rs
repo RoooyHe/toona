@@ -7,11 +7,12 @@ live_design! {
 
     use crate::shared::styles::*;
 
-    pub KanbanCard = <View> {
+    pub KanbanCard = {{KanbanCard}} {
         width: Fill, height: Fit
         flow: Down
         padding: 8
         spacing: 6
+        cursor: Hand
         show_bg: true
         draw_bg: {
             color: #FFFFFF
@@ -92,17 +93,83 @@ live_design! {
 pub struct KanbanCard {
     #[deref]
     view: View,
+
+    #[rust]
+    card_id: Option<String>,
+    #[rust]
+    is_selected: bool,
+}
+
+
+#[derive(Clone, Debug, DefaultNone)]
+pub enum KanbanCardAction {
+    Clicked { card_id: String },
+    None,
 }
 
 impl Widget for KanbanCard {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
-        if let Event::MouseDown(_) = event {
-            log!("KanbanCard clicked!");
+        match event.hits(cx, self.view.area()) {
+            Hit::FingerUp(fe) if fe.is_over && fe.is_primary_hit() && fe.was_tap() => {
+                if let Some(card_id) = self.card_id.clone() {
+                    cx.widget_action(
+                        self.widget_uid(),
+                        &scope.path,
+                        KanbanCardAction::Clicked { card_id },
+                    );
+                }
+            }
+            _ => {}
         }
         self.view.handle_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         self.view.draw_walk(cx, scope, walk)
+    }
+}
+
+impl KanbanCard {
+    fn set_card(&mut self, cx: &mut Cx, card_id: &str, title: &str, is_selected: bool) {
+        self.card_id = Some(card_id.to_string());
+        self.view.label(ids!(card_title)).set_text(cx, title);
+        self.set_selected(cx, is_selected);
+    }
+
+    fn set_selected(&mut self, cx: &mut Cx, is_selected: bool) {
+        self.is_selected = is_selected;
+        let bg_color = if is_selected {
+            vec4(0.9, 0.95, 1.0, 1.0)
+        } else {
+            vec4(1.0, 1.0, 1.0, 1.0)
+        };
+        let text_color = if is_selected {
+            vec4(0.06, 0.33, 0.7, 1.0)
+        } else {
+            vec4(0.09, 0.17, 0.3, 1.0)
+        };
+        self.view.apply_over(
+            cx,
+            live! {
+                draw_bg: { color: (bg_color) }
+                card_title = { draw_text: { color: (text_color) } }
+            },
+        );
+    }
+}
+
+impl KanbanCardRef {
+    pub fn set_card(&self, cx: &mut Cx, card_id: &str, title: &str, is_selected: bool) {
+        let Some(mut inner) = self.borrow_mut() else {
+            return;
+        };
+        inner.set_card(cx, card_id, title, is_selected);
+    }
+
+    pub fn set_selected(&self, cx: &mut Cx, is_selected: bool) {
+        let Some(mut inner) = self.borrow_mut() else {
+            return;
+        };
+        inner.set_selected(cx, is_selected);
     }
 }
