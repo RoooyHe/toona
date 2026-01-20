@@ -3,20 +3,16 @@
 
 use makepad_widgets::Cx;
 
-pub mod kanban_app;
 pub mod data;
-pub mod state;
 pub mod api;
-pub mod ui;
+pub mod state;
 pub mod drag_drop;
 
 // Re-export main types for convenience
-pub use kanban_app::KanbanApp;
 pub use data::models::*;
 pub use state::kanban_state::*;
 pub use state::kanban_actions::*;
 
-pub fn live_design(cx: &mut Cx) {
-    ui::live_design(cx);
-    kanban_app::live_design(cx);
+pub fn live_design(_cx: &mut Cx) {
+    // Kanban live design is handled by home screen components
 }

@@ -18,7 +18,8 @@ live_design! {
     use crate::home::search_messages::*;
     use crate::home::spaces_bar::*;
     use crate::home::add_room::*;
-    use crate::kanban::kanban_app::KanbanApp;
+    use crate::home::kanban_list_view::KanbanListView;
+    use crate::home::kanban_card::KanbanCard;
     use crate::shared::styles::*;
     use crate::shared::room_filter_input_bar::RoomFilterInputBar;
     use crate::home::main_desktop_ui::MainDesktopUI;
@@ -109,10 +110,23 @@ live_design! {
                             color: #F4F5F7
                         },
 
-                        flow: Down,
+                        flow: Right,
+                        padding: 20,
+                        spacing: 16,
 
-                        kanban_app = <KanbanApp> {
-                            width: Fill, height: Fill
+                        kanban_list_todo = <KanbanListView> {
+                            width: 280,
+                            height: Fill,
+                        }
+
+                        kanban_list_doing = <KanbanListView> {
+                            width: 280,
+                            height: Fill,
+                        }
+
+                        kanban_list_done = <KanbanListView> {
+                            width: 280,
+                            height: Fill,
                         }
                     }
 
