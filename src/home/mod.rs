@@ -28,6 +28,7 @@ pub mod link_preview;
 pub mod room_image_viewer;
 pub mod kanban_list_view;
 pub mod kanban_card;
+pub mod kanban_card_detail;
 
 pub fn live_design(cx: &mut Cx) {
     search_messages::live_design(cx);
@@ -57,4 +58,5 @@ pub fn live_design(cx: &mut Cx) {
     link_preview::live_design(cx);
     kanban_list_view::live_design(cx);
     kanban_card::live_design(cx);
+    kanban_card_detail::live_design(cx);
 }

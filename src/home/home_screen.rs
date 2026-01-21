@@ -25,6 +25,7 @@ live_design! {
     use crate::home::add_room::*;
     use crate::home::kanban_list_view::KanbanListView;
     use crate::home::kanban_card::KanbanCard;
+    use crate::home::kanban_card_detail::KanbanCardDetail;
     use crate::shared::styles::*;
     use crate::shared::room_filter_input_bar::RoomFilterInputBar;
     use crate::home::main_desktop_ui::MainDesktopUI;
@@ -132,6 +133,22 @@ live_design! {
                         kanban_list_done = <KanbanListView> {
                             width: 280,
                             height: Fill,
+                        }
+
+                        card_detail_modal = <View> {
+                            visible: false
+                            width: Fill, height: Fill
+                            show_bg: true
+                            draw_bg: { color: #00000050 }
+
+                            modal_content = <View> {
+                                width: 800, height: 600
+                                margin: {left: 200}
+                                show_bg: true
+                                draw_bg: { color: #F4F5F7 }
+
+                                <KanbanCardDetail> {}
+                            }
                         }
                     }
 
@@ -291,6 +308,10 @@ pub struct HomeScreen {
     is_spaces_bar_shown: bool,
     #[rust]
     selected_kanban_card_id: Option<String>,
+    #[rust]
+    selected_kanban_card_title: Option<String>,
+    #[rust]
+    is_kanban_card_modal_open: bool,
 }
 
 impl Widget for HomeScreen {
@@ -392,6 +413,11 @@ impl Widget for HomeScreen {
                     match card_action {
                         KanbanCardAction::Clicked { card_id } => {
                             self.selected_kanban_card_id = Some(card_id.clone());
+                            self.selected_kanban_card_title = Some(format!("卡片 {}", card_id));
+                            self.is_kanban_card_modal_open = true;
+                            self.view
+                                .view(ids!(kanban_page.card_detail_modal))
+                                .set_visible(cx, true);
                             self.view.redraw(cx);
                         }
                         KanbanCardAction::None => {}
@@ -412,6 +438,7 @@ impl Widget for HomeScreen {
         self.update_active_page_from_selection(cx, app_state);
         if matches!(app_state.selected_tab, SelectedTab::Kanban) {
             self.sync_kanban_lists(cx, app_state);
+            self.sync_card_detail_modal(cx);
         }
 
         self.view.draw_walk(cx, scope, walk)
@@ -448,6 +475,13 @@ impl HomeScreen {
         }
     }
 
+    fn sync_card_detail_modal(&mut self, cx: &mut Cx) {
+        let modal = self.view.view(ids!(kanban_page.card_detail_modal));
+        modal.set_visible(cx, self.is_kanban_card_modal_open);
+    }
+}
+
+impl HomeScreen {
     fn update_active_page_from_selection(
         &mut self,
         cx: &mut Cx,
