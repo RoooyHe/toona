@@ -88,3 +88,11 @@ impl KanbanCard {
         self.update_visual_state(cx);
     }
 }
+
+impl KanbanCardRef {
+    pub fn set_card(&self, cx: &mut Cx, card_id: &str, title: &str, is_selected: bool) {
+        if let Some(mut inner) = self.borrow_mut() {
+            inner.set_card(cx, card_id, title, is_selected);
+        }
+    }
+}

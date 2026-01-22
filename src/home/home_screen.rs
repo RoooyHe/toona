@@ -43,7 +43,6 @@ live_design! {
         show_bg: true
         draw_bg: {
             color: (COLOR_PRIMARY_DARKER),
-            border_radius: 4.0,
             border_size: 0.0
             shadow_color: #0005
             shadow_radius: 15.0
@@ -146,6 +145,23 @@ live_design! {
                                 margin: {left: 200}
                                 show_bg: true
                                 draw_bg: { color: #F4F5F7 }
+
+                                close_button = <View> {
+                                    width: 32, height: 32
+                                    margin: {top: 10, right: 10}
+                                    align: {x: 1.0, y: 0.0}
+                                    show_bg: true
+                                    draw_bg: { color: #EBECF0, border_radius: 4 }
+
+                                    close_label = <Label> {
+                                        width: Fill, height: Fill
+                                        text: "X"
+                                        draw_text: {
+                                            text_style: <THEME_FONT_BOLD>{font_size: 16}
+                                            color: #172B4D
+                                        }
+                                    }
+                                }
 
                                 <KanbanCardDetail> {}
                             }
@@ -415,9 +431,10 @@ impl Widget for HomeScreen {
                             self.selected_kanban_card_id = Some(card_id.clone());
                             self.selected_kanban_card_title = Some(format!("卡片 {}", card_id));
                             self.is_kanban_card_modal_open = true;
+                            let modal_id = ids!(kanban_page.card_detail_modal);
                             self.view
-                                .view(ids!(kanban_page.card_detail_modal))
-                                .set_visible(cx, true);
+                                .view(modal_id)
+                                .apply_over(cx, live! { visible: true });
                             self.view.redraw(cx);
                         }
                         KanbanCardAction::None => {}
@@ -476,8 +493,11 @@ impl HomeScreen {
     }
 
     fn sync_card_detail_modal(&mut self, cx: &mut Cx) {
-        let modal = self.view.view(ids!(kanban_page.card_detail_modal));
-        modal.set_visible(cx, self.is_kanban_card_modal_open);
+        let modal_id = ids!(kanban_page.card_detail_modal);
+        self.view
+            .view(modal_id)
+            .apply_over(cx, live! { visible: (self.is_kanban_card_modal_open) });
+        self.view.redraw(cx);
     }
 }
 

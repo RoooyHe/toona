@@ -138,7 +138,7 @@ live_design! {
                         avatar_1 = <View> {
                             width: 32, height: 32
                             show_bg: true
-                            draw_bg: { color: #0079BF, border_radius: 16 }
+                            draw_bg: { color: #0079BF }
                         }
 
                         activity_text_1 = <Label> {
