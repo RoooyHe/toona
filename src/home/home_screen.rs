@@ -113,25 +113,24 @@ live_design! {
                         show_bg: true,
                         draw_bg: {
                             color: #F4F5F7
-                        },
-
-                        flow: Right,
-                        padding: 20,
-                        spacing: 16,
-
-                        kanban_list_todo = <KanbanListView> {
-                            width: 280,
-                            height: Fill,
                         }
 
-                        kanban_list_doing = <KanbanListView> {
-                            width: 280,
-                            height: Fill,
-                        }
+                        kanban_lists_container = <View> {
+                            flow: Right,
+                            padding: 20,
+                            spacing: 16,
 
-                        kanban_list_done = <KanbanListView> {
-                            width: 280,
-                            height: Fill,
+                            kanban_list_todo = <KanbanListView> {
+                                width: 280, height: Fill,
+                            }
+
+                            kanban_list_doing = <KanbanListView> {
+                                width: 280, height: Fill,
+                            }
+
+                            kanban_list_done = <KanbanListView> {
+                                width: 280, height: Fill,
+                            }
                         }
 
                         card_detail_modal = <View> {
@@ -151,7 +150,7 @@ live_design! {
                                     margin: {top: 10, right: 10}
                                     align: {x: 1.0, y: 0.0}
                                     show_bg: true
-                                    draw_bg: { color: #EBECF0, border_radius: 4 }
+                                    draw_bg: { color: #EBECF0 }
 
                                     close_label = <Label> {
                                         width: Fill, height: Fill
@@ -426,16 +425,20 @@ impl Widget for HomeScreen {
                 }
 
                 if let Some(card_action) = action.downcast_ref::<KanbanCardAction>() {
+                    log!("HomeScreen received KanbanCardAction: {:?}", card_action);
                     match card_action {
                         KanbanCardAction::Clicked { card_id } => {
+                            log!("Opening modal for card: {}", card_id);
                             self.selected_kanban_card_id = Some(card_id.clone());
                             self.selected_kanban_card_title = Some(format!("卡片 {}", card_id));
                             self.is_kanban_card_modal_open = true;
                             let modal_id = ids!(kanban_page.card_detail_modal);
-                            self.view
-                                .view(modal_id)
-                                .apply_over(cx, live! { visible: true });
+                            self.view.view(modal_id).set_visible(cx, true);
                             self.view.redraw(cx);
+                            log!(
+                                "Modal should be visible now: {}",
+                                self.is_kanban_card_modal_open
+                            );
                         }
                         KanbanCardAction::None => {}
                     }
@@ -496,7 +499,7 @@ impl HomeScreen {
         let modal_id = ids!(kanban_page.card_detail_modal);
         self.view
             .view(modal_id)
-            .apply_over(cx, live! { visible: (self.is_kanban_card_modal_open) });
+            .set_visible(cx, self.is_kanban_card_modal_open);
         self.view.redraw(cx);
     }
 }

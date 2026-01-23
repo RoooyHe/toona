@@ -1,6 +1,6 @@
 use makepad_widgets::*;
 
-use crate::home::kanban_card::KanbanCardWidgetExt;
+use crate::home::kanban_card::{KanbanCardAction, KanbanCardWidgetExt};
 
 live_design! {
     use link::theme::*;
@@ -42,11 +42,11 @@ live_design! {
             spacing: 8
             padding: 8
 
-            card_1 = <KanbanCard> { visible: false }
-            card_2 = <KanbanCard> { visible: false }
-            card_3 = <KanbanCard> { visible: false }
-            card_4 = <KanbanCard> { visible: false }
-            card_5 = <KanbanCard> { visible: false }
+            card_1 = <KanbanCard> { width: Fill, height: 60 }
+            card_2 = <KanbanCard> { width: Fill, height: 60 }
+            card_3 = <KanbanCard> { width: Fill, height: 60 }
+            card_4 = <KanbanCard> { width: Fill, height: 60 }
+            card_5 = <KanbanCard> { width: Fill, height: 60 }
         }
     }
 }
@@ -61,10 +61,35 @@ pub struct KanbanCardSummary {
 pub struct KanbanListView {
     #[deref]
     view: View,
+    #[rust]
+    cards: Vec<KanbanCardSummary>,
 }
 
 impl Widget for KanbanListView {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
+        if let Event::Actions(actions) = event {
+            let card_ids = [
+                ids!(cards_container.card_1),
+                ids!(cards_container.card_2),
+                ids!(cards_container.card_3),
+                ids!(cards_container.card_4),
+                ids!(cards_container.card_5),
+            ];
+
+            for (index, card_id) in card_ids.iter().enumerate() {
+                if let Some(card_data) = self.cards.get(index) {
+                    if self.view.button(*card_id).clicked(actions) {
+                        cx.widget_action(
+                            self.widget_uid(),
+                            &scope.path,
+                            KanbanCardAction::Clicked {
+                                card_id: card_data.id.clone(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
         self.view.handle_event(cx, event, scope);
     }
 
@@ -85,6 +110,8 @@ impl KanbanListView {
             .label(ids!(list_header.list_title))
             .set_text(cx, title);
 
+        self.cards = cards.to_vec();
+
         let card_ids = [
             ids!(cards_container.card_1),
             ids!(cards_container.card_2),
@@ -97,12 +124,9 @@ impl KanbanListView {
             if let Some(card_data) = cards.get(slot_index) {
                 let is_selected = selected_card_id == Some(card_data.id.as_str());
                 self.view.view(*card_id).set_visible(cx, true);
-                self.view.kanban_card(*card_id).set_card(
-                    cx,
-                    &card_data.id,
-                    &card_data.title,
-                    is_selected,
-                );
+                if let Some(mut card) = self.view.kanban_card(&[card_id[0]]).borrow_mut() {
+                    card.set_card(cx, &card_data.id, &card_data.title, is_selected);
+                }
             } else {
                 self.view.view(*card_id).set_visible(cx, false);
             }

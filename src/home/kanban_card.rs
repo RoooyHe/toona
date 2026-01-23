@@ -7,8 +7,8 @@ live_design! {
 
     use crate::shared::styles::*;
 
-    pub KanbanCard = {{KanbanCard}} {
-        width: Fill, height: Fit
+    pub KanbanCard = <Button> {
+        width: Fill, height: 60
         flow: Down
         padding: 8
         spacing: 6
@@ -31,7 +31,7 @@ live_design! {
 #[derive(Live, LiveHook, Widget)]
 pub struct KanbanCard {
     #[deref]
-    view: View,
+    button: Button,
     #[rust]
     card_id: Option<String>,
     #[rust]
@@ -46,27 +46,11 @@ pub enum KanbanCardAction {
 
 impl Widget for KanbanCard {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
-        match event {
-            Event::MouseDown(_) => {
-                let card_id = self.card_id.clone();
-                if let Some(card_id) = card_id {
-                    log!("KanbanCard clicked: {}", card_id);
-                    self.is_selected = !self.is_selected;
-                    self.update_visual_state(cx);
-                    cx.widget_action(
-                        self.widget_uid(),
-                        &scope.path,
-                        KanbanCardAction::Clicked { card_id },
-                    );
-                }
-            }
-            _ => {}
-        }
-        self.view.handle_event(cx, event, scope);
+        self.button.handle_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        self.view.draw_walk(cx, scope, walk)
+        self.button.draw_walk(cx, scope, walk)
     }
 }
 
@@ -77,14 +61,14 @@ impl KanbanCard {
         } else {
             vec4(1.0, 1.0, 1.0, 1.0)
         };
-        self.view
+        self.button
             .apply_over(cx, live! { draw_bg: { color: (bg_color) } });
     }
 
     pub fn set_card(&mut self, cx: &mut Cx, card_id: &str, title: &str, is_selected: bool) {
         self.card_id = Some(card_id.to_string());
         self.is_selected = is_selected;
-        self.view.label(ids!(card_title)).set_text(cx, title);
+        self.button.label(ids!(card_title)).set_text(cx, title);
         self.update_visual_state(cx);
     }
 }
@@ -93,6 +77,14 @@ impl KanbanCardRef {
     pub fn set_card(&self, cx: &mut Cx, card_id: &str, title: &str, is_selected: bool) {
         if let Some(mut inner) = self.borrow_mut() {
             inner.set_card(cx, card_id, title, is_selected);
+        }
+    }
+
+    pub fn clicked(&self, actions: &Actions) -> bool {
+        if let Some(btn) = self.borrow() {
+            btn.clicked(actions)
+        } else {
+            false
         }
     }
 }
