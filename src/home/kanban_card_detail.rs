@@ -12,46 +12,90 @@ live_design! {
         flow: Down
         show_bg: true
         draw_bg: {
-            color: #F4F5F7
+            color: #FFFFFF
         }
 
-        content = <View> {
+        padding: 16
+        spacing: 16
+
+        header_section = <View> {
+            width: Fill, height: Fit
+            flow: Down
+            spacing: 4
+
+            card_icon = <View> {
+                width: 24, height: 24
+                show_bg: true
+                draw_bg: { color: #EBECF0 }
+            }
+
+            card_title = <Label> {
+                width: Fill, height: Fit
+                text: "卡片标题"
+                draw_text: {
+                    text_style: <THEME_FONT_BOLD>{font_size: 20}
+                    color: #172B4D
+                }
+            }
+
+            in_list_label = <Label> {
+                width: Fill, height: Fit
+                text: "在列表 \"待办\" 中"
+                draw_text: {
+                    text_style: <THEME_FONT_REGULAR>{font_size: 13}
+                    color: #5E6C84
+                }
+            }
+        }
+
+        main_content = <View> {
             width: Fill, height: Fill
             flow: Right
             spacing: 16
-            padding: 16
 
-            main_column = <View> {
+            left_column = <View> {
                 width: Fill, height: Fit
                 flow: Down
-                spacing: 16
+                spacing: 20
 
-                title_section = <View> {
+                labels_section = <View> {
                     width: Fill, height: Fit
                     flow: Down
                     spacing: 8
 
-                    title_icon = <View> {
-                        width: 24, height: 24
-                        show_bg: true
-                        draw_bg: { color: #EBECF0 }
-                    }
-
-                    card_title = <Label> {
+                    section_title = <Label> {
                         width: Fill, height: Fit
-                        text: "卡片标题"
+                        text: "标签"
                         draw_text: {
-                            text_style: <THEME_FONT_BOLD>{font_size: 20}
+                            text_style: <THEME_FONT_BOLD>{font_size: 14}
                             color: #172B4D
                         }
                     }
 
-                    in_list_label = <Label> {
+                    labels_row = <View> {
                         width: Fill, height: Fit
-                        text: "在列表 中"
-                        draw_text: {
-                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                            color: #5E6C84
+                        flow: Right
+                        spacing: 6
+
+                        label_blue = <View> {
+                            width: 60, height: 24
+                            show_bg: true
+                            draw_bg: { color: #0079BF }
+                        }
+                        label_green = <View> {
+                            width: 60, height: 24
+                            show_bg: true
+                            draw_bg: { color: #61BD4F }
+                        }
+                        label_orange = <View> {
+                            width: 60, height: 24
+                            show_bg: true
+                            draw_bg: { color: #FF9F1A }
+                        }
+                        label_red = <View> {
+                            width: 60, height: 24
+                            show_bg: true
+                            draw_bg: { color: #EB5A46 }
                         }
                     }
                 }
@@ -61,34 +105,21 @@ live_design! {
                     flow: Down
                     spacing: 8
 
-                    section_header = <View> {
-                        width: Fill, height: 32
-                        flow: Right
-                        spacing: 8
-                        align: {y: 0.5}
-
-                        desc_icon = <View> {
-                            width: 24, height: 24
-                            show_bg: true
-                            draw_bg: { color: #EBECF0 }
-                        }
-
-                        desc_label = <Label> {
-                            width: Fit, height: Fit
-                            text: "描述"
-                            draw_text: {
-                                text_style: <THEME_FONT_BOLD>{font_size: 16}
-                                color: #172B4D
-                            }
+                    desc_label = <Label> {
+                        width: Fill, height: Fit
+                        text: "描述"
+                        draw_text: {
+                            text_style: <THEME_FONT_BOLD>{font_size: 14}
+                            color: #172B4D
                         }
                     }
 
                     desc_content = <View> {
                         width: Fill, height: Fit
-                        padding: 8
+                        padding: 10
                         show_bg: true
                         draw_bg: {
-                            color: #FFFFFF
+                            color: #F4F5F7
                         }
 
                         desc_text = <Label> {
@@ -102,142 +133,19 @@ live_design! {
                     }
                 }
 
-                activity_section = <View> {
+                checklist_section = <View> {
                     width: Fill, height: Fit
                     flow: Down
                     spacing: 8
 
-                    activity_header = <View> {
-                        width: Fill, height: 32
-                        flow: Right
-                        spacing: 8
-                        align: {y: 0.5}
-
-                        activity_icon = <View> {
-                            width: 24, height: 24
-                            show_bg: true
-                            draw_bg: { color: #EBECF0 }
-                        }
-
-                        activity_label = <Label> {
-                            width: Fit, height: Fit
-                            text: "活动"
-                            draw_text: {
-                                text_style: <THEME_FONT_BOLD>{font_size: 16}
-                                color: #172B4D
-                            }
+                    checklist_title = <Label> {
+                        width: Fill, height: Fit
+                        text: "清单"
+                        draw_text: {
+                            text_style: <THEME_FONT_BOLD>{font_size: 14}
+                            color: #172B4D
                         }
                     }
-
-                    activity_item_1 = <View> {
-                        width: Fill, height: 40
-                        flow: Right
-                        spacing: 8
-                        align: {y: 0.5}
-
-                        avatar_1 = <View> {
-                            width: 32, height: 32
-                            show_bg: true
-                            draw_bg: { color: #0079BF }
-                        }
-
-                        activity_text_1 = <Label> {
-                            width: Fill, height: Fit
-                            text: "Roy 添加了此卡片到 待办"
-                            draw_text: {
-                                text_style: <THEME_FONT_REGULAR>{font_size: 13}
-                                color: #172B4D
-                            }
-                        }
-                    }
-                }
-            }
-
-            sidebar = <View> {
-                width: 180, height: Fill
-                flow: Down
-                spacing: 8
-
-                add_to_card_label = <Label> {
-                    width: Fill, height: Fit
-                    text: "添加到卡片"
-                    draw_text: {
-                        text_style: <THEME_FONT_BOLD>{font_size: 12}
-                        color: #5E6C84
-                    }
-                }
-
-                members_label = <Label> {
-                    width: Fill, height: Fit
-                    text: "成员"
-                    draw_text: {
-                        text_style: <THEME_FONT_BOLD>{font_size: 12}
-                        color: #5E6C84
-                    }
-                }
-
-                labels_label = <Label> {
-                    width: Fill, height: Fit
-                    text: "标签"
-                    draw_text: {
-                        text_style: <THEME_FONT_BOLD>{font_size: 12}
-                        color: #5E6C84
-                    }
-                }
-
-                labels_row = <View> {
-                    width: Fill, height: Fit
-                    flow: Right
-                    spacing: 4
-
-                    label_blue = <View> {
-                        width: 40, height: 8
-                        show_bg: true
-                        draw_bg: { color: #0079BF }
-                    }
-                    label_green = <View> {
-                        width: 40, height: 8
-                        show_bg: true
-                        draw_bg: { color: #61BD4F }
-                    }
-                    label_orange = <View> {
-                        width: 40, height: 8
-                        show_bg: true
-                        draw_bg: { color: #FF9F1A }
-                    }
-                }
-
-                dates_label = <Label> {
-                    width: Fill, height: Fit
-                    text: "日期"
-                    draw_text: {
-                        text_style: <THEME_FONT_BOLD>{font_size: 12}
-                        color: #5E6C84
-                    }
-                }
-
-                date_value = <Label> {
-                    width: Fill, height: Fit
-                    text: "2026年1月25日"
-                    draw_text: {
-                        text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                        color: #172B4D
-                    }
-                }
-
-                checklist_label = <Label> {
-                    width: Fill, height: Fit
-                    text: "清单"
-                    draw_text: {
-                        text_style: <THEME_FONT_BOLD>{font_size: 12}
-                        color: #5E6C84
-                    }
-                }
-
-                checklist_progress = <View> {
-                    width: Fill, height: Fit
-                    flow: Down
-                    spacing: 4
 
                     progress_bar = <View> {
                         width: Fill, height: 8
@@ -259,6 +167,384 @@ live_design! {
                             color: #5E6C84
                         }
                     }
+
+                    checklist_item_1 = <View> {
+                        width: Fill, height: 28
+                        flow: Right
+                        spacing: 8
+
+                        checkbox = <View> {
+                            width: 16, height: 16
+                            show_bg: true
+                            draw_bg: { color: #EBECF0 }
+                        }
+
+                        item_text = <Label> {
+                            width: Fill, height: Fit
+                            text: "任务项 1"
+                            draw_text: {
+                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                color: #172B4D
+                            }
+                        }
+                    }
+
+                    checklist_item_2 = <View> {
+                        width: Fill, height: 28
+                        flow: Right
+                        spacing: 8
+
+                        checkbox_checked = <View> {
+                            width: 16, height: 16
+                            show_bg: true
+                            draw_bg: { color: #61BD4F }
+                        }
+
+                        item_text_checked = <Label> {
+                            width: Fill, height: Fit
+                            text: "任务项 2"
+                            draw_text: {
+                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                color: #5E6C84
+                            }
+                        }
+                    }
+
+                    checklist_item_3 = <View> {
+                        width: Fill, height: 28
+                        flow: Right
+                        spacing: 8
+
+                        checkbox = <View> {
+                            width: 16, height: 16
+                            show_bg: true
+                            draw_bg: { color: #EBECF0 }
+                        }
+
+                        item_text = <Label> {
+                            width: Fill, height: Fit
+                            text: "任务项 3"
+                            draw_text: {
+                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                color: #172B4D
+                            }
+                        }
+                    }
+
+                    checklist_item_4 = <View> {
+                        width: Fill, height: 28
+                        flow: Right
+                        spacing: 8
+
+                        checkbox_checked = <View> {
+                            width: 16, height: 16
+                            show_bg: true
+                            draw_bg: { color: #61BD4F }
+                        }
+
+                        item_text_checked = <Label> {
+                            width: Fill, height: Fit
+                            text: "任务项 4"
+                            draw_text: {
+                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                color: #5E6C84
+                            }
+                        }
+                    }
+                }
+
+                activity_section = <View> {
+                    width: Fill, height: Fit
+                    flow: Down
+                    spacing: 12
+
+                    activity_title = <Label> {
+                        width: Fill, height: Fit
+                        text: "活动"
+                        draw_text: {
+                            text_style: <THEME_FONT_BOLD>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+
+                    activity_1 = <View> {
+                        width: Fill, height: Fit
+                        flow: Right
+                        spacing: 8
+
+                        user_avatar_1 = <View> {
+                            width: 32, height: 32
+                            show_bg: true
+                            draw_bg: { color: #0079BF }
+                        }
+
+                        activity_content_1 = <View> {
+                            width: Fill, height: Fit
+                            flow: Down
+                            spacing: 2
+
+                            activity_text_1 = <Label> {
+                                width: Fill, height: Fit
+                                text: "张三 添加了此卡片到 \"待办\""
+                                draw_text: {
+                                    text_style: <THEME_FONT_REGULAR>{font_size: 13}
+                                    color: #172B4D
+                                }
+                            }
+
+                            activity_time_1 = <Label> {
+                                width: Fill, height: Fit
+                                text: "今天 上午 10:30"
+                                draw_text: {
+                                    text_style: <THEME_FONT_REGULAR>{font_size: 12}
+                                    color: #5E6C84
+                                }
+                            }
+                        }
+                    }
+
+                    activity_2 = <View> {
+                        width: Fill, height: Fit
+                        flow: Right
+                        spacing: 8
+
+                        user_avatar_2 = <View> {
+                            width: 32, height: 32
+                            show_bg: true
+                            draw_bg: { color: #61BD4F }
+                        }
+
+                        activity_content_2 = <View> {
+                            width: Fill, height: Fit
+                            flow: Down
+                            spacing: 2
+
+                            activity_text_2 = <Label> {
+                                width: Fill, height: Fit
+                                text: "李四 将描述编辑为 \"这是一个卡片的描述...\""
+                                draw_text: {
+                                    text_style: <THEME_FONT_REGULAR>{font_size: 13}
+                                    color: #172B4D
+                                }
+                            }
+
+                            activity_time_2 = <Label> {
+                                width: Fill, height: Fit
+                                text: "昨天 下午 3:45"
+                                draw_text: {
+                                    text_style: <THEME_FONT_REGULAR>{font_size: 12}
+                                    color: #5E6C84
+                                }
+                            }
+                        }
+                    }
+
+                    comment_section = <View> {
+                        width: Fill, height: Fit
+                        flow: Down
+                        spacing: 8
+
+                        comment_title = <Label> {
+                            width: Fill, height: Fit
+                            text: "评论"
+                            draw_text: {
+                                text_style: <THEME_FONT_BOLD>{font_size: 14}
+                                color: #172B4D
+                            }
+                        }
+
+                        comment_1 = <View> {
+                            width: Fill, height: Fit
+                            flow: Right
+                            spacing: 8
+
+                            comment_avatar = <View> {
+                                width: 32, height: 32
+                                show_bg: true
+                                draw_bg: { color: #FF9F1A }
+                            }
+
+                            comment_content = <View> {
+                                width: Fill, height: Fit
+                                flow: Down
+                                spacing: 4
+
+                                comment_header = <View> {
+                                    width: Fill, height: Fit
+                                    flow: Right
+                                    spacing: 8
+
+                                    comment_user = <Label> {
+                                        width: Fit, height: Fit
+                                        text: "王五"
+                                        draw_text: {
+                                            text_style: <THEME_FONT_BOLD>{font_size: 13}
+                                            color: #172B4D
+                                        }
+                                    }
+
+                                    comment_time = <Label> {
+                                        width: Fill, height: Fit
+                                        text: "2 小时前"
+                                        draw_text: {
+                                            text_style: <THEME_FONT_REGULAR>{font_size: 12}
+                                            color: #5E6C84
+                                        }
+                                    }
+                                }
+
+                                comment_text = <Label> {
+                                    width: Fill, height: Fit
+                                    text: "这个任务需要尽快完成，客户在等待反馈。"
+                                    draw_text: {
+                                        text_style: <THEME_FONT_REGULAR>{font_size: 13}
+                                        color: #172B4D
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            right_column = <View> {
+                width: 100, height: Fit
+                flow: Down
+                spacing: 12
+
+                add_to_card_label = <Label> {
+                    width: Fill, height: Fit
+                    text: "添加到卡片"
+                    draw_text: {
+                        text_style: <THEME_FONT_BOLD>{font_size: 12}
+                        color: #5E6C84
+                    }
+                }
+
+                member_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    member_icon = <View> {
+                        width: 20, height: 20
+                        show_bg: true
+                        draw_bg: { color: #5E6C84 }
+                    }
+
+                    member_label = <Label> {
+                        width: Fill, height: Fit
+                        text: "成员"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+                }
+
+                label_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    label_icon = <View> {
+                        width: 20, height: 20
+                        show_bg: true
+                        draw_bg: { color: #FF9F1A }
+                    }
+
+                    label_text = <Label> {
+                        width: Fill, height: Fit
+                        text: "标签"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+                }
+
+                checklist_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    checklist_icon = <View> {
+                        width: 20, height: 20
+                        show_bg: true
+                        draw_bg: { color: #61BD4F }
+                    }
+
+                    checklist_text = <Label> {
+                        width: Fill, height: Fit
+                        text: "清单"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+                }
+
+                date_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    date_icon = <View> {
+                        width: 20, height: 20
+                        show_bg: true
+                        draw_bg: { color: #EB5A46 }
+                    }
+
+                    date_text = <Label> {
+                        width: Fill, height: Fit
+                        text: "日期"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+                }
+
+                attachment_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    attachment_text = <Label> {
+                        width: Fill, height: Fit
+                        text: "附件"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
+                }
+
+                cover_btn = <View> {
+                    width: Fill, height: 32
+                    show_bg: true
+                    draw_bg: { color: #EBECF0 }
+                    align: {x: 0.0, y: 0.5}
+                    padding: {left: 8, right: 8}
+
+                    cover_text = <Label> {
+                        width: Fill, height: Fit
+                        text: "封面"
+                        draw_text: {
+                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                            color: #172B4D
+                        }
+                    }
                 }
 
                 actions_label = <Label> {
@@ -270,14 +556,14 @@ live_design! {
                     }
                 }
 
-                move_card_btn = <View> {
+                move_btn = <View> {
                     width: Fill, height: 32
                     show_bg: true
                     draw_bg: { color: #EBECF0 }
                     align: {x: 0.0, y: 0.5}
-                    padding: {left: 8}
+                    padding: {left: 8, right: 8}
 
-                    move_label = <Label> {
+                    move_text = <Label> {
                         width: Fill, height: Fit
                         text: "移动"
                         draw_text: {
@@ -287,14 +573,14 @@ live_design! {
                     }
                 }
 
-                copy_card_btn = <View> {
+                copy_btn = <View> {
                     width: Fill, height: 32
                     show_bg: true
                     draw_bg: { color: #EBECF0 }
                     align: {x: 0.0, y: 0.5}
-                    padding: {left: 8}
+                    padding: {left: 8, right: 8}
 
-                    copy_label = <Label> {
+                    copy_text = <Label> {
                         width: Fill, height: Fit
                         text: "复制"
                         draw_text: {
@@ -309,14 +595,14 @@ live_design! {
                     show_bg: true
                     draw_bg: { color: #EBECF0 }
                     align: {x: 0.0, y: 0.5}
-                    padding: {left: 8}
+                    padding: {left: 8, right: 8}
 
-                    archive_label = <Label> {
+                    archive_text = <Label> {
                         width: Fill, height: Fit
                         text: "归档"
                         draw_text: {
                             text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                            color: #172B4D
+                            color: #EB5A5A
                         }
                     }
                 }
@@ -353,7 +639,7 @@ impl KanbanCardDetail {
     pub fn set_card(&mut self, cx: &mut Cx, card_id: &str, title: &str) {
         self.card_id = Some(card_id.to_string());
         self.view
-            .label(ids!(main_column.title_section.card_title))
+            .label(ids!(header_section.card_title))
             .set_text(cx, title);
     }
 }

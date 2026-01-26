@@ -1,6 +1,6 @@
 use makepad_widgets::*;
 
-use crate::home::kanban_card::{KanbanCardAction, KanbanCardWidgetExt};
+use crate::home::kanban_card::KanbanCardAction;
 
 live_design! {
     use link::theme::*;
@@ -63,11 +63,14 @@ pub struct KanbanListView {
     view: View,
     #[rust]
     cards: Vec<KanbanCardSummary>,
+    #[rust]
+    card_widgets: Vec<(String, String)>, // (card_id, title)
 }
 
 impl Widget for KanbanListView {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         if let Event::Actions(actions) = event {
+            log!("KanbanListView received actions");
             let card_ids = [
                 ids!(cards_container.card_1),
                 ids!(cards_container.card_2),
@@ -77,13 +80,14 @@ impl Widget for KanbanListView {
             ];
 
             for (index, card_id) in card_ids.iter().enumerate() {
-                if let Some(card_data) = self.cards.get(index) {
+                if let Some((stored_card_id, _)) = self.card_widgets.get(index) {
                     if self.view.button(*card_id).clicked(actions) {
+                        log!("KanbanListView: card {} clicked", stored_card_id);
                         cx.widget_action(
                             self.widget_uid(),
                             &scope.path,
                             KanbanCardAction::Clicked {
-                                card_id: card_data.id.clone(),
+                                card_id: stored_card_id.clone(),
                             },
                         );
                     }
@@ -111,6 +115,10 @@ impl KanbanListView {
             .set_text(cx, title);
 
         self.cards = cards.to_vec();
+        self.card_widgets = cards
+            .iter()
+            .map(|card| (card.id.clone(), card.title.clone()))
+            .collect();
 
         let card_ids = [
             ids!(cards_container.card_1),
@@ -124,8 +132,18 @@ impl KanbanListView {
             if let Some(card_data) = cards.get(slot_index) {
                 let is_selected = selected_card_id == Some(card_data.id.as_str());
                 self.view.view(*card_id).set_visible(cx, true);
-                if let Some(mut card) = self.view.kanban_card(&[card_id[0]]).borrow_mut() {
-                    card.set_card(cx, &card_data.id, &card_data.title, is_selected);
+
+                // 设置卡片标题
+                if let Some(mut btn) = self.view.button(*card_id).borrow_mut() {
+                    btn.label(ids!(card_title)).set_text(cx, &card_data.title);
+
+                    // 设置背景颜色
+                    let bg_color = if is_selected {
+                        vec4(0.9, 0.95, 1.0, 1.0)
+                    } else {
+                        vec4(1.0, 1.0, 1.0, 1.0)
+                    };
+                    btn.apply_over(cx, live! { draw_bg: { color: (bg_color) } });
                 }
             } else {
                 self.view.view(*card_id).set_visible(cx, false);

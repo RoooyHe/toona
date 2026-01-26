@@ -43,7 +43,6 @@ live_design! {
         show_bg: true
         draw_bg: {
             color: (COLOR_PRIMARY_DARKER),
-            border_size: 0.0
             shadow_color: #0005
             shadow_radius: 15.0
             shadow_offset: vec2(1.0, 0.0)
@@ -115,55 +114,58 @@ live_design! {
                             color: #F4F5F7
                         }
 
-                        kanban_lists_container = <View> {
-                            flow: Right,
-                            padding: 20,
-                            spacing: 16,
+                        flow: Right
 
-                            kanban_list_todo = <KanbanListView> {
-                                width: 280, height: Fill,
-                            }
+                        board_container = <View> {
+                            width: Fill, height: Fill
+                            flow: Down
 
-                            kanban_list_doing = <KanbanListView> {
-                                width: 280, height: Fill,
-                            }
+                            kanban_board_area = <View> {
+                                width: Fill, height: Fill
+                                flow: Right
+                                padding: 20
+                                spacing: 16
 
-                            kanban_list_done = <KanbanListView> {
-                                width: 280, height: Fill,
+                                kanban_list_todo = <KanbanListView> {
+                                    width: 280, height: Fill,
+                                }
+
+                                kanban_list_doing = <KanbanListView> {
+                                    width: 280, height: Fill,
+                                }
+
+                                kanban_list_done = <KanbanListView> {
+                                    width: 280, height: Fill,
+                                }
                             }
                         }
 
-                        card_detail_modal = <View> {
+                        card_detail_sidebar = <View> {
                             visible: false
-                            width: Fill, height: Fill
+                            width: 400, height: Fill
                             show_bg: true
-                            draw_bg: { color: #00000050 }
+                            draw_bg: {
+                                color: #FFFFFF
+                            }
 
-                            modal_content = <View> {
-                                width: 800, height: 600
-                                margin: {left: 200}
+                            close_button = <View> {
+                                width: 32, height: 32
+                                margin: 10
+                                align: {x: 1.0, y: 0.0}
                                 show_bg: true
-                                draw_bg: { color: #F4F5F7 }
+                                draw_bg: { color: #EBECF0 }
 
-                                close_button = <View> {
-                                    width: 32, height: 32
-                                    margin: {top: 10, right: 10}
-                                    align: {x: 1.0, y: 0.0}
-                                    show_bg: true
-                                    draw_bg: { color: #EBECF0 }
-
-                                    close_label = <Label> {
-                                        width: Fill, height: Fill
-                                        text: "X"
-                                        draw_text: {
-                                            text_style: <THEME_FONT_BOLD>{font_size: 16}
-                                            color: #172B4D
-                                        }
+                                close_label = <Label> {
+                                    width: Fill, height: Fill
+                                    text: "X"
+                                    draw_text: {
+                                        text_style: <THEME_FONT_BOLD>{font_size: 16}
+                                        color: #172B4D
                                     }
                                 }
-
-                                <KanbanCardDetail> {}
                             }
+
+                            <KanbanCardDetail> {}
                         }
                     }
 
@@ -326,12 +328,14 @@ pub struct HomeScreen {
     #[rust]
     selected_kanban_card_title: Option<String>,
     #[rust]
-    is_kanban_card_modal_open: bool,
+    is_kanban_card_detail_open: bool,
 }
 
 impl Widget for HomeScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         if let Event::Actions(actions) = event {
+            log!("HomeScreen received actions: {:?}", actions);
+
             let app_state = scope.data.get_mut::<AppState>().unwrap();
             for action in actions {
                 if let Some(nav_action) = action.downcast_ref::<NavigationBarAction>() {
@@ -428,19 +432,53 @@ impl Widget for HomeScreen {
                     log!("HomeScreen received KanbanCardAction: {:?}", card_action);
                     match card_action {
                         KanbanCardAction::Clicked { card_id } => {
-                            log!("Opening modal for card: {}", card_id);
+                            log!("Opening sidebar for card: {}", card_id);
                             self.selected_kanban_card_id = Some(card_id.clone());
                             self.selected_kanban_card_title = Some(format!("卡片 {}", card_id));
-                            self.is_kanban_card_modal_open = true;
-                            let modal_id = ids!(kanban_page.card_detail_modal);
-                            self.view.view(modal_id).set_visible(cx, true);
+                            self.is_kanban_card_detail_open = true;
+                            let sidebar_id = ids!(kanban_page.card_detail_sidebar);
+                            self.view.view(sidebar_id).set_visible(cx, true);
                             self.view.redraw(cx);
                             log!(
-                                "Modal should be visible now: {}",
-                                self.is_kanban_card_modal_open
+                                "Sidebar should be visible now: {}",
+                                self.is_kanban_card_detail_open
                             );
                         }
                         KanbanCardAction::None => {}
+                    }
+                }
+
+                // Direct click detection for kanban cards (bypass event bubbling through PageFlip)
+                if matches!(app_state.selected_tab, SelectedTab::Kanban) {
+                    let list_views = [
+                        (
+                            "kanban_list_todo",
+                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
+                        ),
+                        (
+                            "kanban_list_doing",
+                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
+                        ),
+                        (
+                            "kanban_list_done",
+                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
+                        ),
+                    ];
+
+                    for (list_name, card_names) in list_views.iter() {
+                        for (index, card_name) in card_names.iter().enumerate() {
+                            if self.view.button(ids!(kanban_page.board_container.kanban_board_area.(id!(list_name)).(id!(card_name)))).clicked(actions) {
+                                // Generate a fake card_id based on list and index
+                                let fake_card_id = format!("{}-{}-{}", list_name, index, card_name);
+                                log!("Direct click detected on card: {}", fake_card_id);
+                                self.selected_kanban_card_id = Some(fake_card_id.clone());
+                                self.selected_kanban_card_title = Some(format!("卡片 {}", fake_card_id));
+                                self.is_kanban_card_detail_open = true;
+                                let sidebar_id = ids!(kanban_page.card_detail_sidebar);
+                                self.view.view(sidebar_id).set_visible(cx, true);
+                                self.view.redraw(cx);
+                            }
+                        }
                     }
                 }
             }
@@ -458,7 +496,7 @@ impl Widget for HomeScreen {
         self.update_active_page_from_selection(cx, app_state);
         if matches!(app_state.selected_tab, SelectedTab::Kanban) {
             self.sync_kanban_lists(cx, app_state);
-            self.sync_card_detail_modal(cx);
+            self.sync_card_detail_sidebar(cx);
         }
 
         self.view.draw_walk(cx, scope, walk)
@@ -495,11 +533,24 @@ impl HomeScreen {
         }
     }
 
-    fn sync_card_detail_modal(&mut self, cx: &mut Cx) {
-        let modal_id = ids!(kanban_page.card_detail_modal);
+    fn sync_card_detail_sidebar(&mut self, cx: &mut Cx) {
+        let sidebar_id = ids!(kanban_page.card_detail_sidebar);
         self.view
-            .view(modal_id)
-            .set_visible(cx, self.is_kanban_card_modal_open);
+            .view(sidebar_id)
+            .set_visible(cx, self.is_kanban_card_detail_open);
+
+        if self.is_kanban_card_detail_open {
+            if let Some(ref title) = self.selected_kanban_card_title {
+                let detail_id = ids!(
+                    kanban_page
+                        .card_detail_sidebar
+                        .KanbanCardDetail
+                        .header_section
+                        .card_title
+                );
+                self.view.label(detail_id).set_text(cx, title);
+            }
+        }
         self.view.redraw(cx);
     }
 }

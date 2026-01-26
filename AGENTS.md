@@ -154,28 +154,92 @@ live_design! {
 
 ```
 src/
-├── app.rs              # App entry point
-├── home/               # Main UI (rooms, kanban, navigation)
-│   ├── home_screen.rs  # Main screen with kanban toggle
-│   ├── kanban_list_view.rs
-│   ├── kanban_card.rs
-│   └── mod.rs          # Register new UI components here
-├── kanban/             # Kanban data models and state
-│   ├── data/models.rs  # KanbanBoard, KanbanCard structs
-│   └── state/          # KanbanState, KanbanActions
-├── room/               # Room-specific UI
-├── login/              # Login screen
-├── settings/           # Settings screen
-├── shared/             # Reusable widgets and styles
-└── persistence/        # Serialization and storage
+├── lib.rs                   # Library entry point
+├── main.rs                  # Program entry point
+├── app.rs                   # App entry point, state management
+├── utils.rs                 # Shared utility functions
+├── sliding_sync.rs          # Matrix Sliding Sync logic
+├── space_service_sync.rs    # Matrix Space Service Sync
+├── avatar_cache.rs          # Avatar caching
+├── media_cache.rs           # Media caching
+├── location.rs              # Location functionality
+├── event_preview.rs         # Event preview generation
+├── temp_storage.rs          # Temporary data storage
+├── verification.rs          # E2EE verification
+├── verification_modal.rs    # Verification modal UI
+├── join_leave_room_modal.rs # Join/leave room modal
+│
+├── home/                    # Main UI (rooms, kanban, navigation)
+│   ├── mod.rs               # Register new UI components here
+│   ├── home_screen.rs       # Main screen with kanban toggle
+│   ├── main_desktop_ui.rs   # Desktop-specific UI
+│   ├── main_mobile_ui.rs    # Mobile-specific UI
+│   ├── kanban_list_view.rs  # Kanban board list view
+│   ├── kanban_card.rs       # Kanban card component
+│   ├── kanban_card_detail.rs # Kanban card detail view
+│   ├── room_screen.rs       # Room chat screen
+│   ├── rooms_list.rs        # Rooms list component
+│   ├── rooms_sidebar.rs     # Sidebar with rooms
+│   ├── rooms_list_header.rs # Rooms list header
+│   ├── rooms_list_entry.rs  # Individual room entry
+│   ├── spaces_bar.rs        # Spaces navigation bar
+│   ├── space_lobby.rs       # Space lobby view
+│   ├── search_messages.rs   # Message search
+│   ├── invite_screen.rs     # Invite users screen
+│   ├── navigation_tab_bar.rs # Tab bar navigation
+│   ├── light_themed_dock.rs # Dock component
+│   ├── welcome_screen.rs    # Welcome screen
+│   ├── loading_pane.rs      # Loading indicator
+│   ├── editing_pane.rs      # Editing mode pane
+│   ├── new_message_context_menu.rs # Context menu
+│   ├── event_reaction_list.rs # Reaction display
+│   ├── link_preview.rs      # Link preview widget
+│   ├── location_preview.rs  # Location preview
+│   ├── room_image_viewer.rs # Image viewer
+│   ├── room_read_receipt.rs # Read receipts
+│   ├── edited_indicator.rs  # Edited indicator
+│   ├── add_room.rs          # Add room dialog
+│   ├── tombstone_footer.rs  # Tombstone message footer
+│   └── ...
+│
+├── kanban/                  # Kanban board functionality
+│   ├── mod.rs
+│   ├── api/                 # Kanban API integration
+│   ├── data/                # Kanban data models
+│   ├── drag_drop/           # Drag and drop logic
+│   └── state/               # Kanban state management
+│
+├── room/                    # Room-specific UI
+├── login/                   # Login screen
+├── logout/                  # Logout flow
+├── settings/                # Settings screen
+├── profile/                 # User profile
+├── shared/                  # Reusable widgets and styles
+├── persistence/             # Serialization and storage
+│
+├── tsp/                     # TSP wallet integration [feature: tsp]
+└── tsp_dummy/               # TSP placeholder module
 ```
+
+## Feature Flags
+
+| Feature | Description |
+|---------|-------------|
+| `tsp` | Enable experimental TSP wallet support |
+| `hide_windows_console` | Hide console on Windows |
+| `log_room_list_diffs` | Log RoomList diffs |
+| `log_timeline_diffs` | Log timeline diffs |
+| `log_space_service_diffs` | Log SpaceService diffs |
 
 ## Key Dependencies
 - `matrix-sdk`, `matrix-sdk-ui` - Matrix protocol
 - `makepad-widgets` - UI framework
+- `robius-*` crates - Robius app framework
 - `tokio` - Async runtime
 - `anyhow` - Error handling
 - `chrono` - Date/time
+- `serde` - Serialization
+- `ruma` - Matrix protocol types
 
 ## Editor/Assistant Rules
 
@@ -184,6 +248,7 @@ src/
 3. New UI components must be registered in `home/mod.rs` live_design function
 4. When modifying UI, test on both desktop and mobile
 5. No `.cursor/rules/` or `.github/copilot-instructions.md` in this repo
+6. Do NOT generate documentation files (*.md) in the project
 
 ## Common Patterns
 
@@ -224,3 +289,5 @@ impl Widget for MyComponent {
 - Makepad assets packaged via `package.metadata.packager` in Cargo.toml
 - Matrix SDK calls are async - handle with care
 - Register new widgets in `home/mod.rs` live_design function
+- TSP feature requires specific dependencies and patches (see Cargo.toml)
+- Use `gitcode.com` mirrors for internal dependencies

@@ -12,7 +12,6 @@ live_design! {
         flow: Down
         padding: 8
         spacing: 6
-        show_bg: true
         draw_bg: {
             color: #FFFFFF
         }
