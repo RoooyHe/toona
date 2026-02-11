@@ -19,6 +19,7 @@ use crate::{
     },
     kanban::{
         KanbanActions, KanbanAppState, KanbanBoard, KanbanCard, KanbanFilterState, KanbanList,
+        MatrixKanbanAdapter,
     },
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
@@ -32,7 +33,7 @@ use crate::{
         confirmation_modal::ConfirmationModalWidgetRefExt,
         image_viewer::{ImageViewerAction, LoadState},
     },
-    sliding_sync::current_user_id,
+    sliding_sync::{current_user_id, get_client, submit_async_request, MatrixRequest},
     utils::RoomNameId,
     verification::VerificationAction,
     verification_modal::{VerificationModalAction, VerificationModalWidgetRefExt},
@@ -68,14 +69,14 @@ live_design! {
     App = {{App}} {
         ui: <Root>{
             main_window = <Window> {
-                window: {inner_size: vec2(1280, 800), title: "Robrix"},
+                window: {inner_size: vec2(1280, 800), title: "Toona"},
                 pass: {clear_color: #FFFFFF00}
                 caption_bar = {
                     caption_label = {
                         label = {
                             margin: {left: 65},
                             align: {x: 0.5},
-                            text: "Robrix",
+                            text: "Toona",
                             draw_text: {color: (COLOR_TEXT)}
                         }
                     }
@@ -729,9 +730,19 @@ impl App {
         let state = &mut self.app_state.kanban_state;
         match action {
             KanbanActions::LoadBoards => {
-                if state.boards.is_empty() {
-                    let board = Self::seed_board(state, "示例看板", None);
-                    state.current_board_id = Some(board.id.clone());
+                // Try to load boards from Matrix
+                if let Some(client) = get_client() {
+                    let _adapter = MatrixKanbanAdapter::new(client);
+                    
+                    // Spawn async task to load boards from Matrix
+                    submit_async_request(MatrixRequest::LoadKanbanBoards);
+                    state.loading = true;
+                } else {
+                    // Fallback to seed data if no client available
+                    if state.boards.is_empty() {
+                        let board = Self::seed_board(state, "示例看板", None);
+                        state.current_board_id = Some(board.id.clone());
+                    }
                 }
             }
             KanbanActions::SelectBoard(board_id) => {
@@ -740,8 +751,18 @@ impl App {
                 }
             }
             KanbanActions::CreateBoard { name, description } => {
-                let board = Self::seed_board(state, &name, description.clone());
-                state.current_board_id = Some(board.id.clone());
+                // Submit async request to create board in Matrix
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::CreateKanbanBoard {
+                        name: name.clone(),
+                        description: description.clone(),
+                    });
+                    state.loading = true;
+                } else {
+                    // Fallback to local creation if no client
+                    let board = Self::seed_board(state, &name, description.clone());
+                    state.current_board_id = Some(board.id.clone());
+                }
             }
 
             KanbanActions::UpdateBoard { board_id, updates } => {
@@ -829,12 +850,23 @@ impl App {
                 list_id,
                 name,
             } => {
-                if let Some(list) = state.lists.get_mut(&list_id) {
-                    if list.board_id == board_id {
-                        let card = KanbanCard::new(&name, list_id.clone(), board_id.clone());
-                        list.card_ids.push(card.id.clone());
-                        state.cards.insert(card.id.clone(), card);
-                        list.updated_at = chrono::Utc::now().to_rfc3339();
+                // Submit async request to create card in Matrix
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::CreateKanbanCard {
+                        board_id: board_id.clone(),
+                        list_id: list_id.clone(),
+                        name: name.clone(),
+                    });
+                    state.loading = true;
+                } else {
+                    // Fallback to local creation if no client
+                    if let Some(list) = state.lists.get_mut(&list_id) {
+                        if list.board_id == board_id {
+                            let card = KanbanCard::new(&name, list_id.clone(), board_id.clone());
+                            list.card_ids.push(card.id.clone());
+                            state.cards.insert(card.id.clone(), card);
+                            list.updated_at = chrono::Utc::now().to_rfc3339();
+                        }
                     }
                 }
             }

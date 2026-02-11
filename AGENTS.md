@@ -9,6 +9,8 @@ Toona is a multi-platform Matrix chat client with kanban board features, built i
 - **Language**: Rust 2024 edition
 - **UI**: Makepad (live_design! DSL)
 - **Targets**: macOS, Windows, Linux, Android, iOS
+- **Package Name**: toona
+- **Product Name**: Robrix (for distribution)
 
 ## Build Commands
 
@@ -200,16 +202,34 @@ src/
 │   ├── edited_indicator.rs  # Edited indicator
 │   ├── add_room.rs          # Add room dialog
 │   ├── tombstone_footer.rs  # Tombstone message footer
-│   └── ...
+│   └── new_message_context_menu.rs
 │
 ├── kanban/                  # Kanban board functionality
 │   ├── mod.rs
 │   ├── api/                 # Kanban API integration
+│   │   ├── kanban_requests.rs
+│   │   ├── repositories.rs
+│   │   └── mod.rs
 │   ├── data/                # Kanban data models
+│   │   ├── models.rs
+│   │   ├── repositories.rs
+│   │   └── mod.rs
 │   ├── drag_drop/           # Drag and drop logic
+│   │   ├── drag_handler.rs
+│   │   ├── order_manager.rs
+│   │   └── mod.rs
 │   └── state/               # Kanban state management
+│       ├── kanban_state.rs
+│       ├── kanban_actions.rs
+│       └── mod.rs
 │
 ├── room/                    # Room-specific UI
+│   ├── mod.rs
+│   ├── room_input_bar.rs    # Message input component
+│   ├── reply_preview.rs     # Reply preview widget
+│   ├── room_display_filter.rs # Room display filter
+│   └── typing_notice.rs     # Typing indicator
+│
 ├── login/                   # Login screen
 ├── logout/                  # Logout flow
 ├── settings/                # Settings screen
@@ -234,7 +254,7 @@ src/
 ## Key Dependencies
 - `matrix-sdk`, `matrix-sdk-ui` - Matrix protocol
 - `makepad-widgets` - UI framework
-- `robius-*` crates - Robius app framework
+- `robius-*` crates - Robius app framework (robius-use-makepad, robius-open, robius-directories, robius-location)
 - `tokio` - Async runtime
 - `anyhow` - Error handling
 - `chrono` - Date/time
@@ -291,3 +311,5 @@ impl Widget for MyComponent {
 - Register new widgets in `home/mod.rs` live_design function
 - TSP feature requires specific dependencies and patches (see Cargo.toml)
 - Use `gitcode.com` mirrors for internal dependencies
+- Project uses Robius framework for platform abstractions
+- Package metadata configured for cargo-packager (distributes as "Robrix")

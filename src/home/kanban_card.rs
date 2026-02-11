@@ -8,7 +8,8 @@ live_design! {
     use crate::shared::styles::*;
 
     pub KanbanCard = <Button> {
-        width: Fill, height: 60
+        width: Fill,
+        height: 60
         flow: Down
         padding: 8
         spacing: 6

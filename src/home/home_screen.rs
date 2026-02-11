@@ -334,7 +334,6 @@ pub struct HomeScreen {
 impl Widget for HomeScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         if let Event::Actions(actions) = event {
-            log!("HomeScreen received actions: {:?}", actions);
 
             let app_state = scope.data.get_mut::<AppState>().unwrap();
             for action in actions {
@@ -429,57 +428,40 @@ impl Widget for HomeScreen {
                 }
 
                 if let Some(card_action) = action.downcast_ref::<KanbanCardAction>() {
-                    log!("HomeScreen received KanbanCardAction: {:?}", card_action);
                     match card_action {
                         KanbanCardAction::Clicked { card_id } => {
-                            log!("Opening sidebar for card: {}", card_id);
-                            self.selected_kanban_card_id = Some(card_id.clone());
-                            self.selected_kanban_card_title = Some(format!("卡片 {}", card_id));
-                            self.is_kanban_card_detail_open = true;
-                            let sidebar_id = ids!(kanban_page.card_detail_sidebar);
-                            self.view.view(sidebar_id).set_visible(cx, true);
-                            self.view.redraw(cx);
-                            log!(
-                                "Sidebar should be visible now: {}",
-                                self.is_kanban_card_detail_open
-                            );
+                            
+                            // Find the actual card from the kanban state
+                            if let Some(card) = app_state.kanban_state.cards.get(card_id) {
+                                self.selected_kanban_card_id = Some(card_id.clone());
+                                self.selected_kanban_card_title = Some(card.title.clone());
+                                self.is_kanban_card_detail_open = true;
+                                let sidebar_id = ids!(kanban_page.card_detail_sidebar);
+                                self.view.view(sidebar_id).set_visible(cx, true);
+                                self.view.redraw(cx);
+                            } else {
+                                log!("Warning: Card {} not found in kanban state", card_id);
+                            }
                         }
                         KanbanCardAction::None => {}
                     }
                 }
 
-                // Direct click detection for kanban cards (bypass event bubbling through PageFlip)
-                if matches!(app_state.selected_tab, SelectedTab::Kanban) {
-                    let list_views = [
-                        (
-                            "kanban_list_todo",
-                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
-                        ),
-                        (
-                            "kanban_list_doing",
-                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
-                        ),
-                        (
-                            "kanban_list_done",
-                            &["card_1", "card_2", "card_3", "card_4", "card_5"],
-                        ),
-                    ];
+                // Handle close button for card detail sidebar
+                if self.view.button(ids!(kanban_page.card_detail_sidebar.close_button)).clicked(actions) {
+                    log!("Closing card detail sidebar");
+                    self.is_kanban_card_detail_open = false;
+                    self.selected_kanban_card_id = None;
+                    self.selected_kanban_card_title = None;
+                    let sidebar_id = ids!(kanban_page.card_detail_sidebar);
+                    self.view.view(sidebar_id).set_visible(cx, false);
+                    self.view.redraw(cx);
+                }
 
-                    for (list_name, card_names) in list_views.iter() {
-                        for (index, card_name) in card_names.iter().enumerate() {
-                            if self.view.button(ids!(kanban_page.board_container.kanban_board_area.(id!(list_name)).(id!(card_name)))).clicked(actions) {
-                                // Generate a fake card_id based on list and index
-                                let fake_card_id = format!("{}-{}-{}", list_name, index, card_name);
-                                log!("Direct click detected on card: {}", fake_card_id);
-                                self.selected_kanban_card_id = Some(fake_card_id.clone());
-                                self.selected_kanban_card_title = Some(format!("卡片 {}", fake_card_id));
-                                self.is_kanban_card_detail_open = true;
-                                let sidebar_id = ids!(kanban_page.card_detail_sidebar);
-                                self.view.view(sidebar_id).set_visible(cx, true);
-                                self.view.redraw(cx);
-                            }
-                        }
-                    }
+                // Handle kanban card clicks from the actual state data
+                if matches!(app_state.selected_tab, SelectedTab::Kanban) {
+                    // Card clicks are now handled through KanbanCardAction events
+                    // No need for hardcoded card detection
                 }
             }
         }
