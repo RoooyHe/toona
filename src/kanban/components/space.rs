@@ -1,5 +1,4 @@
 use makepad_widgets::*;
-use crate::kanban::models::State;
 
 live_design! {
     use link::theme::*;
@@ -78,110 +77,49 @@ pub struct SpaceColumn {
     #[deref]
     view: View,
     #[rust]
-    space_idx: Option<usize>,
+    list_id: Option<String>,
 }
 
 impl Widget for SpaceColumn {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
         
-        // 处理空间标题输入框事件
+        // 处理列表标题输入框事件
         if let Event::Actions(actions) = event {
-            // 处理空间标题输入框文本变化
-            if let Some(text) = self.view.text_input(id!(space_title_input)).changed(actions) {
-                if let Some(space_idx) = self.space_idx {
-                    let state = scope.data.get_mut::<State>().unwrap();
-                    
-                    if space_idx < state.spaces_data.len() {
-                        let space_id = state.spaces_data[space_idx].id;
-                        println!("SpaceColumn: 空间标题输入变化: '{}' (空间ID: {})", text, space_id);
-                        // 这里可以实时更新状态，但通常我们在失去焦点或回车时才保存
+            // 处理标题输入框文本变化
+            if let Some(text) = self.view.text_input(ids!(space_title_input)).changed(actions) {
+                if let Some(list_id) = &self.list_id {
+                    println!("SpaceColumn: 列表标题输入变化: '{}' (列表ID: {})", text, list_id);
+                }
+            }
+            
+            // 处理标题输入框回车
+            if let Some((text, _)) = self.view.text_input(ids!(space_title_input)).returned(actions) {
+                if let Some(list_id) = &self.list_id {
+                    if !text.trim().is_empty() {
+                        println!("SpaceColumn: 回车更新列表标题: '{}' (列表ID: {})", text.trim(), list_id);
+                        // TODO: 触发更新列表标题的 Action
                     }
                 }
             }
             
-            // 处理空间标题输入框回车
-            if let Some((text, _)) = self.view.text_input(id!(space_title_input)).returned(actions) {
-                if let Some(space_idx) = self.space_idx {
-                    let state = scope.data.get_mut::<State>().unwrap();
-                    
-                    if space_idx < state.spaces_data.len() {
-                        let space_id = state.spaces_data[space_idx].id;
-                        let current_title = &state.spaces_data[space_idx].title;
-                        
-                        if text.trim() != current_title && !text.trim().is_empty() {
-                            println!("SpaceColumn: 回车更新空间标题: '{}' -> '{}' (空间ID: {})", current_title, text.trim(), space_id);
-                            // 设置待更新的空间标题
-                            state.pending_space_update = Some((space_id, text.trim().to_string()));
-                        }
-                    }
-                }
-            }
-            
-            // 处理空间标题输入框失去焦点
-            // 注意：Makepad 可能没有直接的 focus_lost 方法，我们可以通过其他方式检测
-            // 暂时注释掉，使用其他方法
-            /*
-            if self.view.text_input(id!(space_title_input)).focus_lost(actions) {
-                if let Some(space_idx) = self.space_idx {
-                    let state = scope.data.get_mut::<State>().unwrap();
-                    
-                    if space_idx < state.spaces_data.len() {
-                        let space_id = state.spaces_data[space_idx].id;
-                        let current_title = &state.spaces_data[space_idx].title;
-                        let input_text = self.view.text_input(id!(space_title_input)).text();
-                        
-                        if input_text.trim() != current_title && !input_text.trim().is_empty() {
-                            println!("SpaceColumn: 失去焦点更新空间标题: '{}' -> '{}' (空间ID: {})", current_title, input_text.trim(), space_id);
-                            // 设置待更新的空间标题
-                            state.pending_space_update = Some((space_id, input_text.trim().to_string()));
-                        }
-                    }
-                }
-            }
-            */
-        }
-        
-        // 处理鼠标点击事件，用于调试焦点问题
-        if let Event::MouseDown(_) = event {
-            println!("SpaceColumn: 检测到鼠标点击事件");
-        }
-        
-        // 处理添加卡片按钮点击事件
-        if let Event::Actions(actions) = event {
-            if self.view.button(id!(create_button)).clicked(actions) {
-                println!("SpaceColumn: 检测到创建卡片按钮点击");
-                
-                // 使用存储的space_idx
-                if let Some(space_idx) = self.space_idx {
-                    let state = scope.data.get_mut::<State>().unwrap();
-                    
-                    if space_idx < state.spaces_data.len() {
-                        let space_id = state.spaces_data[space_idx].id;
-                        let space_title = &state.spaces_data[space_idx].title;
-                        
-                        println!("SpaceColumn: 在空间 '{}' (ID: {}, 索引: {}) 中添加新卡片输入框", space_title, space_id, space_idx);
-                        
-                        // 直接添加新卡片输入框状态
-                        state.new_card_inputs.insert(space_id, String::new());
-                        cx.redraw_all();
-                    } else {
-                        println!("SpaceColumn: 空间索引 {} 超出范围", space_idx);
-                    }
-                } else {
-                    println!("SpaceColumn: space_idx 未设置");
+            // 处理创建卡片按钮点击
+            if self.view.button(ids!(create_button)).clicked(actions) {
+                if let Some(list_id) = &self.list_id {
+                    println!("SpaceColumn: 在列表 {} 中创建新卡片", list_id);
+                    // TODO: 触发创建卡片的 Action
+                    cx.redraw_all();
                 }
             }
         }
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 在draw阶段从scope.props获取并存储space_idx
-        if let Some(space_idx) = scope.props.get::<usize>() {
-            self.space_idx = Some(*space_idx);
+        // 从 scope.props 获取 list_id
+        if let Some(list_id) = scope.props.get::<String>() {
+            self.list_id = Some(list_id.clone());
         }
         
-        // 确保事件能正确传递到子组件
         self.view.draw_walk(cx, scope, walk)
     }
 }
@@ -194,35 +132,58 @@ pub struct SpaceList {
 
 impl Widget for SpaceList {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
-        // 首先让view处理事件，这会将事件传递给子组件
         self.view.handle_event(cx, event, scope);
-        
-        // 简化：让主应用程序处理按钮点击
-        // 这里不处理按钮事件，交给App处理
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
-            let state = scope.data.get_mut::<State>().unwrap();
-
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
-                list.set_item_range(cx, 0, state.spaces_data.len());
+                // 获取列表数据并克隆，避免借用冲突
+                let lists: Vec<_> = {
+                    if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                        let state = &app_state.kanban_state;
+                        let board_lists = state.current_board_lists();
+                        log!("SpaceList: Found {} lists in current board", board_lists.len());
+                        if let Some(board_id) = &state.current_board_id {
+                            log!("SpaceList: Current board ID: {}", board_id);
+                            if let Some(board) = state.boards.get(board_id) {
+                                log!("SpaceList: Board '{}' has {} list_ids:", board.name, board.list_ids.len());
+                                for list_id in &board.list_ids {
+                                    log!("  - board.list_ids contains: '{}'", list_id);
+                                }
+                            }
+                        } else {
+                            log!("SpaceList: No current board selected");
+                        }
+                        log!("SpaceList: Total boards: {}, Total lists in state.lists: {}", 
+                            state.boards.len(), state.lists.len());
+                        log!("SpaceList: Keys in state.lists HashMap:");
+                        for key in state.lists.keys() {
+                            log!("  - state.lists key: '{}'", key);
+                        }
+                        board_lists.into_iter().map(|l| l.clone()).collect()
+                    } else {
+                        // 如果没有 AppState，返回空列表
+                        log!("SpaceList: No AppState in scope!");
+                        Vec::new()
+                    }
+                };
+                
+                log!("SpaceList: Setting item range to {}", lists.len());
+                list.set_item_range(cx, 0, lists.len());
 
-                while let Some(space_idx) = list.next_visible_item(cx) {
-                    if space_idx >= state.spaces_data.len() {
+                while let Some(list_idx) = list.next_visible_item(cx) {
+                    if list_idx >= lists.len() {
                         continue;
                     }
 
-                    let space_item = list.item(cx, space_idx, live_id!(Space));
-                    let space = &state.spaces_data[space_idx];
+                    let space_item = list.item(cx, list_idx, live_id!(Space));
+                    let kanban_list = &lists[list_idx];
 
-                    // 只在需要时设置空间标题输入框的文本（避免覆盖用户输入）
-                    let current_text = space_item.text_input(id!(space_title_input)).text();
-                    if current_text.is_empty() || current_text == "空间标题" {
-                        space_item
-                            .text_input(id!(space_title_input))
-                            .set_text(cx, &space.title);
-                    }
+                    // 设置列表标题
+                    space_item
+                        .text_input(ids!(space_title_input))
+                        .set_text(cx, &kanban_list.name);
 
                     // 设置背景颜色
                     let colors = [
@@ -235,7 +196,7 @@ impl Widget for SpaceList {
                         0xE0F2FEFFu32, // 浅青色
                         0xF0FFF4FFu32, // 浅薄荷绿
                     ];
-                    let color_index = space_idx % colors.len();
+                    let color_index = list_idx % colors.len();
                     let bg_color = colors[color_index];
 
                     space_item.apply_over(
@@ -247,9 +208,13 @@ impl Widget for SpaceList {
                         },
                     );
 
-                    // 为 SpaceColumn 传递 space_idx
-                    let mut space_scope = Scope::with_data_props(state, &space_idx);
-                    space_item.draw_all(cx, &mut space_scope);
+                    // 传递 list_id 给 SpaceColumn
+                    let list_id = kanban_list.id.clone();
+                    if let Some(app_state_mut) = scope.data.get_mut::<crate::app::AppState>() {
+                        let kanban_state = &mut app_state_mut.kanban_state;
+                        let mut space_scope = Scope::with_data_props(kanban_state, &list_id);
+                        space_item.draw_all(cx, &mut space_scope);
+                    }
                 }
             }
         }

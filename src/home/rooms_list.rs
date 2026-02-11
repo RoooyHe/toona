@@ -1199,6 +1199,22 @@ impl Widget for RoomsList {
             // Handle a regular room (joined or invited) being clicked.
             if let RoomsListEntryAction::Clicked(clicked_room_id) = action.as_widget_action().cast()
             {
+                // 检查是否是 Space（看板），如果是则跳过
+                if let Some(_jr) = self.all_joined_rooms.get(&clicked_room_id) {
+                    // 检查房间类型，跳过 Space
+                    if let Some(client) = crate::sliding_sync::get_client() {
+                        if let Some(room) = client.get_room(&clicked_room_id) {
+                            // 检查是否是 Space (room_type == "m.space")
+                            if let Some(room_type) = room.room_type() {
+                                if room_type.to_string() == "m.space" {
+                                    log!("Skipping Space room click: {}", clicked_room_id);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 let new_selected_room = if let Some(jr) =
                     self.all_joined_rooms.get(&clicked_room_id)
                 {

@@ -1755,8 +1755,25 @@ async fn matrix_worker_task(
                     match adapter.get_all_boards().await {
                         Ok(boards) => {
                             log!("Successfully loaded {} kanban boards", boards.len());
-                            // TODO: Send boards data back to UI thread
-                            // For now, just signal completion
+                            
+                            // 为每个看板加载列表
+                            for board in &boards {
+                                match adapter.load_lists(board).await {
+                                    Ok(lists) => {
+                                        log!("Loaded {} lists for board {}", lists.len(), board.name);
+                                        // 发送列表数据
+                                        for list in lists {
+                                            Cx::post_action(KanbanActions::ListLoaded(list));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to load lists for board {}: {}", board.name, e);
+                                    }
+                                }
+                            }
+                            
+                            // 发送看板数据
+                            Cx::post_action(KanbanActions::BoardsLoaded(boards));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
@@ -1780,12 +1797,23 @@ async fn matrix_worker_task(
                     use crate::kanban::MatrixKanbanAdapter;
                     
                     log!("Creating kanban board: {}", name);
-                    let adapter = MatrixKanbanAdapter::new(client);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
                     
                     match adapter.create_board(&name, description).await {
                         Ok(board_id) => {
                             log!("Successfully created kanban board: {}", board_id);
-                            // TODO: Load the new board and send to UI
+                            
+                            // Reload all boards to get the new one
+                            match adapter.get_all_boards().await {
+                                Ok(boards) => {
+                                    log!("Reloaded {} boards after creation", boards.len());
+                                    Cx::post_action(KanbanActions::BoardsLoaded(boards));
+                                }
+                                Err(e) => {
+                                    error!("Failed to reload boards after creation: {e:?}");
+                                }
+                            }
+                            
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {

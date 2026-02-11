@@ -6,6 +6,12 @@ use crate::kanban::data::models::*;
 pub enum KanbanActions {
     /// 加载看板列表
     LoadBoards,
+    
+    /// 看板列表已加载
+    BoardsLoaded(Vec<KanbanBoard>),
+    
+    /// 列表已加载
+    ListLoaded(KanbanList),
 
     /// 选择看板
     SelectBoard(OwnedRoomId),

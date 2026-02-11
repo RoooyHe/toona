@@ -8,14 +8,8 @@ pub mod api;
 pub mod state;
 pub mod drag_drop;
 pub mod matrix_adapter;
-
-// The following modules are from the old standalone betula app
-// and are currently disabled due to incompatibility:
-// - components (uses old Makepad API and different State structure)
-// - models (DTO models for external API)
-// - services (uses reqwest::blocking which requires feature flag)
-//
-// The actual Toona kanban UI is in src/home/kanban_*.rs files
+pub mod models;
+pub mod components;
 
 // Re-export main types for convenience
 pub use data::models::*;
@@ -30,6 +24,6 @@ pub use matrix_adapter::{
     KANBAN_BOARD_EVENT_TYPE,
 };
 
-pub fn live_design(_cx: &mut Cx) {
-    // Kanban UI components are registered in home/mod.rs
+pub fn live_design(cx: &mut Cx) {
+    components::live_design(cx);
 }

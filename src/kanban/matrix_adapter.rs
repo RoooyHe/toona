@@ -474,9 +474,15 @@ impl MatrixKanbanAdapter {
     }
 
     /// 检查 Room 是否是 Space
-    async fn is_space(&self, _room: &Room) -> bool {
-        // TODO: 实现正确的 Space 检查逻辑
-        // 可以检查 room.room_type() 或读取 m.room.create 状态事件
+    async fn is_space(&self, room: &Room) -> bool {
+        // 检查 room 的类型
+        // Matrix Space 的 room type 是 "m.space"
+        if let Some(room_type) = room.room_type() {
+            return room_type.as_str() == "m.space";
+        }
+        
+        // 如果没有 room_type，尝试从 create 事件中读取
+        // 这是一个备用方法
         false
     }
 

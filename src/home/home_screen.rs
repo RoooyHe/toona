@@ -2,15 +2,10 @@ use makepad_widgets::*;
 
 use crate::{
     app::AppState,
-    home::{
-        kanban_card::KanbanCardAction,
-        kanban_list_view::KanbanCardSummary,
-        navigation_tab_bar::{NavigationBarAction, SelectedTab},
-    },
+    home::navigation_tab_bar::{NavigationBarAction, SelectedTab},
     kanban::KanbanActions,
     settings::settings_screen::SettingsScreenWidgetRefExt,
 };
-use crate::home::kanban_list_view::KanbanListViewWidgetExt;
 
 live_design! {
     use link::theme::*;
@@ -23,13 +18,11 @@ live_design! {
     use crate::home::search_messages::*;
     use crate::home::spaces_bar::*;
     use crate::home::add_room::*;
-    use crate::home::kanban_list_view::KanbanListView;
-    use crate::home::kanban_card::KanbanCard;
-    use crate::home::kanban_card_detail::KanbanCardDetail;
     use crate::shared::styles::*;
     use crate::shared::room_filter_input_bar::RoomFilterInputBar;
     use crate::home::main_desktop_ui::MainDesktopUI;
     use crate::settings::settings_screen::SettingsScreen;
+    use crate::kanban::components::boards_list::BoardsList;
 
 
     StackNavigationWrapper = {{StackNavigationWrapper}} {
@@ -93,6 +86,8 @@ live_design! {
                     home_page = <View> {
                         width: Fill, height: Fill
                         flow: Down
+                        
+                        <MainDesktopUI> {}
                     }
 
                     settings_page = <View> {
@@ -114,58 +109,49 @@ live_design! {
                             color: #F4F5F7
                         }
 
-                        flow: Right
+                        flow: Down
+                        padding: 20
 
-                        board_container = <View> {
-                            width: Fill, height: Fill
-                            flow: Down
+                        // 看板标题栏
+                        <View> {
+                            width: Fill, height: Fit
+                            flow: Right
+                            align: {y: 0.5}
+                            padding: {bottom: 20}
 
-                            kanban_board_area = <View> {
-                                width: Fill, height: Fill
-                                flow: Right
-                                padding: 20
-                                spacing: 16
-
-                                kanban_list_todo = <KanbanListView> {
-                                    width: 280, height: Fill,
+                            <Label> {
+                                text: "看板"
+                                draw_text: {
+                                    text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                    color: #172B4D
                                 }
+                            }
 
-                                kanban_list_doing = <KanbanListView> {
-                                    width: 280, height: Fill,
+                            <View> { width: Fill, height: Fit }
+
+                            create_board_button = <Button> {
+                                text: "创建看板"
+                                width: 120,
+                                height: 40,
+                                draw_bg: {
+                                    color: #0079BF
                                 }
-
-                                kanban_list_done = <KanbanListView> {
-                                    width: 280, height: Fill,
+                                draw_text: {
+                                    color: #FFFFFF
+                                    text_style: <THEME_FONT_REGULAR>{font_size: 14}
                                 }
                             }
                         }
 
-                        card_detail_sidebar = <View> {
-                            visible: false
-                            width: 400, height: Fill
-                            show_bg: true
-                            draw_bg: {
-                                color: #FFFFFF
+                        // 看板列表区域 - 显示所有看板
+                        <ScrollXYView> {
+                            width: Fill, height: Fill
+                            scroll_bars: <ScrollBars> {
+                                show_scroll_x: false,
+                                show_scroll_y: true,
                             }
 
-                            close_button = <View> {
-                                width: 32, height: 32
-                                margin: 10
-                                align: {x: 1.0, y: 0.0}
-                                show_bg: true
-                                draw_bg: { color: #EBECF0 }
-
-                                close_label = <Label> {
-                                    width: Fill, height: Fill
-                                    text: "X"
-                                    draw_text: {
-                                        text_style: <THEME_FONT_BOLD>{font_size: 16}
-                                        color: #172B4D
-                                    }
-                                }
-                            }
-
-                            <KanbanCardDetail> {}
+                            <BoardsList> {}
                         }
                     }
 
@@ -218,6 +204,59 @@ live_design! {
 
                                     <CachedWidget> {
                                         settings_screen = <SettingsScreen> {}
+                                    }
+                                }
+
+                                kanban_page = <View> {
+                                    width: Fill, height: Fill
+                                    show_bg: true,
+                                    draw_bg: {
+                                        color: #F4F5F7
+                                    }
+
+                                    flow: Down
+                                    padding: 20
+
+                                    // 看板标题栏
+                                    <View> {
+                                        width: Fill, height: Fit
+                                        flow: Right
+                                        align: {y: 0.5}
+                                        padding: {bottom: 20}
+
+                                        <Label> {
+                                            text: "看板"
+                                            draw_text: {
+                                                text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                                color: #172B4D
+                                            }
+                                        }
+
+                                        <View> { width: Fill, height: Fit }
+
+                                        create_board_button = <Button> {
+                                            text: "创建看板"
+                                            width: 120,
+                                            height: 40,
+                                            draw_bg: {
+                                                color: #0079BF
+                                            }
+                                            draw_text: {
+                                                color: #FFFFFF
+                                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                            }
+                                        }
+                                    }
+
+                                    // 看板列表区域 - 显示所有看板
+                                    <ScrollXYView> {
+                                        width: Fill, height: Fill
+                                        scroll_bars: <ScrollBars> {
+                                            show_scroll_x: false,
+                                            show_scroll_y: true,
+                                        }
+
+                                        <BoardsList> {}
                                     }
                                 }
 
@@ -323,16 +362,22 @@ pub struct HomeScreen {
     previous_selection: SelectedTab,
     #[rust]
     is_spaces_bar_shown: bool,
-    #[rust]
-    selected_kanban_card_id: Option<String>,
-    #[rust]
-    selected_kanban_card_title: Option<String>,
-    #[rust]
-    is_kanban_card_detail_open: bool,
 }
 
 impl Widget for HomeScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
+        // 处理创建看板按钮点击
+        if let Event::Actions(actions) = event {
+            if self.view.button(ids!(create_board_button)).clicked(actions) {
+                println!("HomeScreen: 创建看板按钮被点击");
+                // 触发创建看板的 Action
+                cx.action(KanbanActions::CreateBoard {
+                    name: "新看板".to_string(),
+                    description: Some("这是一个新创建的看板".to_string()),
+                });
+            }
+        }
+
         if let Event::Actions(actions) = event {
 
             let app_state = scope.data.get_mut::<AppState>().unwrap();
@@ -426,43 +471,6 @@ impl Widget for HomeScreen {
                         NavigationBarAction::TabSelected(_) => {}
                     }
                 }
-
-                if let Some(card_action) = action.downcast_ref::<KanbanCardAction>() {
-                    match card_action {
-                        KanbanCardAction::Clicked { card_id } => {
-                            
-                            // Find the actual card from the kanban state
-                            if let Some(card) = app_state.kanban_state.cards.get(card_id) {
-                                self.selected_kanban_card_id = Some(card_id.clone());
-                                self.selected_kanban_card_title = Some(card.title.clone());
-                                self.is_kanban_card_detail_open = true;
-                                let sidebar_id = ids!(kanban_page.card_detail_sidebar);
-                                self.view.view(sidebar_id).set_visible(cx, true);
-                                self.view.redraw(cx);
-                            } else {
-                                log!("Warning: Card {} not found in kanban state", card_id);
-                            }
-                        }
-                        KanbanCardAction::None => {}
-                    }
-                }
-
-                // Handle close button for card detail sidebar
-                if self.view.button(ids!(kanban_page.card_detail_sidebar.close_button)).clicked(actions) {
-                    log!("Closing card detail sidebar");
-                    self.is_kanban_card_detail_open = false;
-                    self.selected_kanban_card_id = None;
-                    self.selected_kanban_card_title = None;
-                    let sidebar_id = ids!(kanban_page.card_detail_sidebar);
-                    self.view.view(sidebar_id).set_visible(cx, false);
-                    self.view.redraw(cx);
-                }
-
-                // Handle kanban card clicks from the actual state data
-                if matches!(app_state.selected_tab, SelectedTab::Kanban) {
-                    // Card clicks are now handled through KanbanCardAction events
-                    // No need for hardcoded card detection
-                }
             }
         }
 
@@ -476,64 +484,8 @@ impl Widget for HomeScreen {
         // the PageFlip widget will have been reset to its default,
         // so we must re-set it to the correct page based on `app_state.selected_tab`.
         self.update_active_page_from_selection(cx, app_state);
-        if matches!(app_state.selected_tab, SelectedTab::Kanban) {
-            self.sync_kanban_lists(cx, app_state);
-            self.sync_card_detail_sidebar(cx);
-        }
 
         self.view.draw_walk(cx, scope, walk)
-    }
-}
-
-impl HomeScreen {
-    fn sync_kanban_lists(&mut self, cx: &mut Cx, app_state: &AppState) {
-        let list_views = [
-            self.view.kanban_list_view(ids!(kanban_list_todo)),
-            self.view.kanban_list_view(ids!(kanban_list_doing)),
-            self.view.kanban_list_view(ids!(kanban_list_done)),
-        ];
-        let lists = app_state.kanban_state.current_board_lists();
-        let selected_card_id = self.selected_kanban_card_id.as_deref();
-
-        for (list_index, list_view) in list_views.iter().enumerate() {
-            if let Some(list) = lists.get(list_index) {
-                let cards = app_state
-                    .kanban_state
-                    .list_cards(&list.id)
-                    .iter()
-                    .map(|card| KanbanCardSummary {
-                        id: card.id.clone(),
-                        title: card.title.clone(),
-                    })
-                    .collect::<Vec<_>>();
-
-                list_view.set_visible(cx, true);
-                list_view.set_list(cx, &list.name, &cards, selected_card_id);
-            } else {
-                list_view.set_visible(cx, false);
-            }
-        }
-    }
-
-    fn sync_card_detail_sidebar(&mut self, cx: &mut Cx) {
-        let sidebar_id = ids!(kanban_page.card_detail_sidebar);
-        self.view
-            .view(sidebar_id)
-            .set_visible(cx, self.is_kanban_card_detail_open);
-
-        if self.is_kanban_card_detail_open {
-            if let Some(ref title) = self.selected_kanban_card_title {
-                let detail_id = ids!(
-                    kanban_page
-                        .card_detail_sidebar
-                        .KanbanCardDetail
-                        .header_section
-                        .card_title
-                );
-                self.view.label(detail_id).set_text(cx, title);
-            }
-        }
-        self.view.redraw(cx);
     }
 }
 

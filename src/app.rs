@@ -726,7 +726,7 @@ impl App {
         }
     }
 
-    fn handle_kanban_action(&mut self, _cx: &mut Cx, action: KanbanActions) {
+    fn handle_kanban_action(&mut self, cx: &mut Cx, action: KanbanActions) {
         let state = &mut self.app_state.kanban_state;
         match action {
             KanbanActions::LoadBoards => {
@@ -744,6 +744,43 @@ impl App {
                         state.current_board_id = Some(board.id.clone());
                     }
                 }
+            }
+            KanbanActions::BoardsLoaded(boards) => {
+                // Clear existing boards and cards, but NOT lists (they were already loaded)
+                state.boards.clear();
+                state.cards.clear();
+                
+                // Add loaded boards
+                for board in boards {
+                    log!("Adding board: {} with {} list_ids", board.name, board.list_ids.len());
+                    for list_id in &board.list_ids {
+                        log!("  - board.list_id: '{}'", list_id);
+                    }
+                    state.boards.insert(board.id.clone(), board);
+                }
+                
+                // Select first board if none selected
+                if state.current_board_id.is_none() && !state.boards.is_empty() {
+                    state.current_board_id = state.boards.keys().next().cloned();
+                    if let Some(board_id) = &state.current_board_id {
+                        log!("Selected first board: {}", board_id);
+                    }
+                }
+                
+                log!("Loaded {} boards into state", state.boards.len());
+                log!("Current lists in state.lists HashMap:");
+                for (key, list) in &state.lists {
+                    log!("  - state.lists key: '{}', list.name: '{}'", key, list.name);
+                }
+                state.loading = false;
+                self.ui.redraw(cx);
+            }
+            KanbanActions::ListLoaded(list) => {
+                // Add list to state
+                log!("ListLoaded action: list.id='{}', list.name='{}'", list.id, list.name);
+                state.lists.insert(list.id.clone(), list);
+                log!("Total lists in state: {}", state.lists.len());
+                self.ui.redraw(cx);
             }
             KanbanActions::SelectBoard(board_id) => {
                 if state.boards.contains_key(&board_id) {

@@ -14,7 +14,7 @@ Toona is a multi-platform Matrix chat client with kanban board features, built i
 
 ## Build Commands
 
-```bash
+```powershell
 # Debug build
 cargo build
 
@@ -33,7 +33,7 @@ cargo check
 
 ## Test Commands
 
-```bash
+```powershell
 # Run all tests
 cargo test
 
@@ -61,7 +61,7 @@ cargo test --doc
 
 ## Linting & Formatting
 
-```bash
+```powershell
 # Clippy lints
 cargo clippy
 
@@ -77,7 +77,7 @@ cargo fmt -- --check
 
 ## Custom Build Profiles
 
-```bash
+```powershell
 # Optimized dev build
 cargo build --profile debug-opt
 
@@ -176,9 +176,6 @@ src/
 │   ├── home_screen.rs       # Main screen with kanban toggle
 │   ├── main_desktop_ui.rs   # Desktop-specific UI
 │   ├── main_mobile_ui.rs    # Mobile-specific UI
-│   ├── kanban_list_view.rs  # Kanban board list view
-│   ├── kanban_card.rs       # Kanban card component
-│   ├── kanban_card_detail.rs # Kanban card detail view
 │   ├── room_screen.rs       # Room chat screen
 │   ├── rooms_list.rs        # Rooms list component
 │   ├── rooms_sidebar.rs     # Sidebar with rooms
@@ -196,27 +193,41 @@ src/
 │   ├── new_message_context_menu.rs # Context menu
 │   ├── event_reaction_list.rs # Reaction display
 │   ├── link_preview.rs      # Link preview widget
-│   ├── location_preview.rs  # Location preview
+│   ├── location_preview.rs   # Location preview
 │   ├── room_image_viewer.rs # Image viewer
 │   ├── room_read_receipt.rs # Read receipts
-│   ├── edited_indicator.rs  # Edited indicator
+│   ├── edited_indicator.rs   # Edited indicator
 │   ├── add_room.rs          # Add room dialog
-│   ├── tombstone_footer.rs  # Tombstone message footer
-│   └── new_message_context_menu.rs
+│   └── tombstone_footer.rs  # Tombstone message footer
 │
 ├── kanban/                  # Kanban board functionality
-│   ├── mod.rs
-│   ├── api/                 # Kanban API integration
+│   ├── mod.rs               # Module entry, re-exports main types
+│   ├── app.rs               # Kanban app integration
+│   ├── matrix_adapter.rs    # Matrix protocol adapter
+│   ├── api/                 # API integration layer
 │   │   ├── kanban_requests.rs
 │   │   ├── repositories.rs
 │   │   └── mod.rs
-│   ├── data/                # Kanban data models
+│   ├── components/          # Kanban UI components
+│   │   ├── mod.rs
+│   │   ├── space.rs         # Kanban space/board container
+│   │   ├── card_list.rs     # Card list column
+│   │   ├── card_item.rs     # Individual card item
+│   │   ├── card_modal.rs    # Card detail/edit modal
+│   │   ├── modal_header.rs  # Modal header component
+│   │   ├── card_info_section.rs  # Card info section
+│   │   ├── tag_section.rs    # Tag editing section
+│   │   ├── todo_section.rs   # Todo checklist section
+│   │   └── active_section.rs # Active users section
+│   ├── data/                # Data models and storage
 │   │   ├── models.rs
 │   │   ├── repositories.rs
 │   │   └── mod.rs
 │   ├── drag_drop/           # Drag and drop logic
 │   │   ├── drag_handler.rs
 │   │   ├── order_manager.rs
+│   │   └── mod.rs
+│   ├── models/              # Kanban domain models
 │   │   └── mod.rs
 │   └── state/               # Kanban state management
 │       ├── kanban_state.rs
@@ -235,9 +246,21 @@ src/
 ├── settings/                # Settings screen
 ├── profile/                 # User profile
 ├── shared/                  # Reusable widgets and styles
-├── persistence/             # Serialization and storage
+├── persistence/            # Serialization and storage
 │
 ├── tsp/                     # TSP wallet integration [feature: tsp]
+│   ├── create_did_modal.rs
+│   ├── did_qr_code.rs
+│   ├── import_identity_modal.rs
+│   ├── mod.rs
+│   ├── send_coin_modal.rs
+│   ├── settings.rs
+│   ├── token_balance.rs
+│   ├── tsp_action_bar.rs
+│   ├── tsp_chat_bar.rs
+│   ├── tsp_link_handler.rs
+│   └── tsp_signing_modal.rs
+│
 └── tsp_dummy/               # TSP placeholder module
 ```
 
@@ -260,6 +283,10 @@ src/
 - `chrono` - Date/time
 - `serde` - Serialization
 - `ruma` - Matrix protocol types
+- `eyeball`, `eyeball-im` - Observable collections (same as matrix-sdk-ui)
+- `imbl` - Immutable collections (same as matrix-sdk-ui)
+- `dashmap` - Concurrent HashMap
+- `blurhash` - Image blurhash generation
 
 ## Editor/Assistant Rules
 
@@ -303,6 +330,21 @@ impl Widget for MyComponent {
         self.view.draw_walk(cx, scope, walk)
     }
 }
+```
+
+### Kanban Component Pattern
+Kanban components use a modal-based architecture:
+```rust
+// Components hierarchy:
+KanbanSpace (board container)
+├── CardList (column)
+│   └── CardItem (individual card)
+└── CardModal (detail/edit modal)
+    ├── ModalHeader
+    ├── CardInfoSection
+    ├── TagSection
+    ├── TodoSection
+    └── ActiveSection
 ```
 
 ## Development Reminders
