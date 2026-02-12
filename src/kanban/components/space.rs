@@ -106,8 +106,25 @@ impl Widget for SpaceColumn {
             // 处理创建卡片按钮点击
             if self.view.button(ids!(create_button)).clicked(actions) {
                 if let Some(list_id) = &self.list_id {
-                    println!("SpaceColumn: 在列表 {} 中创建新卡片", list_id);
-                    // TODO: 触发创建卡片的 Action
+                    log!("SpaceColumn: 在列表 {} 中创建新卡片", list_id);
+                    
+                    // 从 scope 获取 AppState 和 board_id
+                    if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                        if let Some(board_id) = &app_state.kanban_state.current_board_id {
+                            // 触发创建卡片的 Action
+                            cx.widget_action(
+                                self.widget_uid(),
+                                &scope.path,
+                                crate::kanban::KanbanActions::CreateCard {
+                                    board_id: board_id.clone(),
+                                    list_id: list_id.clone(),
+                                    name: "新卡片".to_string(),
+                                }
+                            );
+                        } else {
+                            log!("SpaceColumn: 没有选中的看板");
+                        }
+                    }
                     cx.redraw_all();
                 }
             }

@@ -19,7 +19,6 @@ use crate::{
     },
     kanban::{
         KanbanActions, KanbanAppState, KanbanBoard, KanbanCard, KanbanFilterState, KanbanList,
-        MatrixKanbanAdapter,
     },
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
@@ -731,9 +730,7 @@ impl App {
         match action {
             KanbanActions::LoadBoards => {
                 // Try to load boards from Matrix
-                if let Some(client) = get_client() {
-                    let _adapter = MatrixKanbanAdapter::new(client);
-                    
+                if get_client().is_some() {
                     // Spawn async task to load boards from Matrix
                     submit_async_request(MatrixRequest::LoadKanbanBoards);
                     state.loading = true;
@@ -784,7 +781,13 @@ impl App {
             }
             KanbanActions::SelectBoard(board_id) => {
                 if state.boards.contains_key(&board_id) {
-                    state.current_board_id = Some(board_id);
+                    state.current_board_id = Some(board_id.clone());
+                    
+                    // Load lists for the selected board
+                    if get_client().is_some() {
+                        submit_async_request(MatrixRequest::LoadKanbanLists { board_id });
+                        state.loading = true;
+                    }
                 }
             }
             KanbanActions::CreateBoard { name, description } => {

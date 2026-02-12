@@ -269,52 +269,37 @@ impl MatrixKanbanAdapter {
 
     /// 创建新看板（Matrix Space）
     pub async fn create_board(&self, name: &str, description: Option<String>) -> Result<OwnedRoomId> {
-        use matrix_sdk::ruma::api::client::room::create_room::v3::{Request as CreateRoomRequest, RoomPreset};
-
-        // 创建看板元数据
-        let _metadata = KanbanBoardMetadata {
-            name: name.to_string(),
-            description: description.clone(),
-            background_color: default_background_color(),
-            labels: Vec::new(),
-            lists: default_lists(),
-            is_archived: false,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
+        use matrix_sdk::ruma::{
+            api::client::room::create_room::v3::{Request as CreateRoomRequest, RoomPreset},
+            events::room::topic::RoomTopicEventContent,
         };
 
         // 构建创建 Space 的请求
         let mut request = CreateRoomRequest::new();
         request.name = Some(name.to_string());
-        request.topic = description;
         request.preset = Some(RoomPreset::PrivateChat); // 私有空间
         request.is_direct = false;
         
-        // TODO: 设置为 Space 类型和添加初始状态事件
-        // 这需要正确的 Matrix SDK API，暂时先创建普通房间
-        // 后续通过 send_state_event 添加元数据
-
         // 创建 Space
         let room = self.client.create_room(request).await
             .context("Failed to create board space")?;
 
         // Get the room_id from the Room object
         let board_id = room.room_id().to_owned();
-
-        // TODO: 创建后立即添加看板元数据
-        // 需要正确的 send_state_event_raw API
-        /*
-        if let Some(space) = self.client.get_room(&board_id) {
-            let metadata_raw = serde_json::value::to_raw_value(&metadata)
-                .context("Failed to serialize board metadata")?;
-            
-            let _ = space.send_state_event_raw(
-                KANBAN_BOARD_EVENT_TYPE.to_string(),
-                "".to_string(),
-                Raw::from_json(metadata_raw),
-            ).await;
-        }
-        */
+        
+        // 创建后立即设置topic（包含[kanban]标记）
+        let topic_with_marker = if let Some(desc) = description {
+            format!("[kanban] {}", desc)
+        } else {
+            "[kanban]".to_string()
+        };
+        
+        log!("Setting topic for board {}: {}", board_id, topic_with_marker);
+        
+        // 发送topic状态事件
+        let topic_content = RoomTopicEventContent::new(topic_with_marker);
+        room.send_state_event(topic_content).await
+            .context("Failed to set board topic")?;
 
         log!("Created kanban board space: {} ({})", name, board_id);
         Ok(board_id)
@@ -457,33 +442,28 @@ impl MatrixKanbanAdapter {
         let mut boards = Vec::new();
 
         // 获取用户的所有 Room
-        for room in self.client.rooms() {
-            // 检查是否是 Space
-            if self.is_space(&room).await {
-                // 尝试加载为看板
-                match self.load_board(room.room_id()).await {
-                    Ok(board) => boards.push(board),
-                    Err(e) => {
-                        log!("Failed to load board {}: {}", room.room_id(), e);
+        let all_rooms = self.client.rooms();
+        
+        for room in all_rooms {
+            let room_id = room.room_id();
+            
+            // 检查topic中是否有[kanban]标记（这是我们识别看板的主要方式）
+            if let Some(topic) = room.topic() {
+                if topic.contains("[kanban]") {
+                    // 尝试加载为看板
+                    match self.load_board(room_id).await {
+                        Ok(board) => {
+                            boards.push(board);
+                        },
+                        Err(e) => {
+                            log!("Failed to load board {}: {}", room_id, e);
+                        }
                     }
                 }
             }
         }
 
         Ok(boards)
-    }
-
-    /// 检查 Room 是否是 Space
-    async fn is_space(&self, room: &Room) -> bool {
-        // 检查 room 的类型
-        // Matrix Space 的 room type 是 "m.space"
-        if let Some(room_type) = room.room_type() {
-            return room_type.as_str() == "m.space";
-        }
-        
-        // 如果没有 room_type，尝试从 create 事件中读取
-        // 这是一个备用方法
-        false
     }
 
     /// 更新看板元数据
@@ -566,14 +546,29 @@ impl MatrixKanbanAdapter {
     /// 读取看板元数据
     async fn read_board_metadata(&self, space: &Room) -> Result<KanbanBoardMetadata> {
         // TODO: 实现正确的状态事件读取
-        // 暂时使用默认值
-        log!("No board metadata found for {}, using defaults", space.room_id());
+        // 暂时从Space的基本属性中提取信息
         let display_name = space.display_name().await?;
         let name = display_name.to_string();
         
+        // 从topic中提取描述，去掉[kanban]标记
+        let description = space.topic().and_then(|topic| {
+            if topic.starts_with("[kanban]") {
+                let desc = topic.trim_start_matches("[kanban]").trim();
+                if desc.is_empty() {
+                    None
+                } else {
+                    Some(desc.to_string())
+                }
+            } else {
+                Some(topic.to_string())
+            }
+        });
+        
+        log!("Loaded board metadata for {}: name='{}', description={:?}", space.room_id(), name, description);
+        
         Ok(KanbanBoardMetadata {
             name,
-            description: None,
+            description,
             background_color: default_background_color(),
             labels: Vec::new(),
             lists: default_lists(),

@@ -5,7 +5,7 @@ live_design! {
     use link::theme::*;
     use link::widgets::*;
 
-    pub BoardCard = <RoundedView> {
+    pub BoardCard = <View> {
         width: 250,
         height: 150,
         margin: 10,
@@ -16,20 +16,35 @@ live_design! {
         }
         
         flow: Down
-        cursor: Hand,
         
         board_name_label = <Label> {
+            width: Fill,
+            height: Fit,
             text: "看板名称"
             draw_text: {
                 text_style: <THEME_FONT_BOLD>{font_size: 18}
                 color: #FFFFFF
             }
         }
+        
+        <View> {
+            width: Fill,
+            height: Fit,
+            margin: {top: 10}
+            
+            <Label> {
+                text: "点击查看详情"
+                draw_text: {
+                    text_style: <THEME_FONT_REGULAR>{font_size: 12}
+                    color: #FFFFFFCC
+                }
+            }
+        }
     }
 
     pub BoardsList = {{BoardsList}} {
-        boards_portal = <PortalList> {
-            width: Fill, height: Fit
+        <PortalList> {
+            width: Fill, height: Fill
             flow: Right
             spacing: 15
             padding: 10
@@ -90,15 +105,12 @@ impl Widget for BoardsList {
                 // 获取看板数据
                 let boards: Vec<_> = {
                     if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                        log!("BoardsList: Found {} boards", app_state.kanban_state.boards.len());
                         app_state.kanban_state.boards.values().cloned().collect()
                     } else {
-                        log!("BoardsList: No AppState in scope!");
                         Vec::new()
                     }
                 };
                 
-                log!("BoardsList: Setting item range to {}", boards.len());
                 list.set_item_range(cx, 0, boards.len());
 
                 while let Some(board_idx) = list.next_visible_item(cx) {
@@ -106,17 +118,16 @@ impl Widget for BoardsList {
                         continue;
                     }
 
-                    let board_item = list.item(cx, board_idx, live_id!(Board));
                     let board = &boards[board_idx];
 
-                    log!("BoardsList: Rendering board '{}' at index {}", board.name, board_idx);
+                    let board_item = list.item(cx, board_idx, live_id!(Board));
 
                     // 设置看板名称
                     board_item
                         .label(ids!(board_name_label))
                         .set_text(cx, &board.name);
                     
-                    // 传递 board_id 给 BoardCard
+                    // 传递 board_id 给 BoardCard 并立即绘制
                     let board_id_str = board.id.to_string();
                     let mut board_scope = Scope::with_props(&board_id_str);
                     board_item.draw_all(cx, &mut board_scope);

@@ -23,6 +23,7 @@ live_design! {
     use crate::home::main_desktop_ui::MainDesktopUI;
     use crate::settings::settings_screen::SettingsScreen;
     use crate::kanban::components::boards_list::BoardsList;
+    use crate::kanban::components::space::SpaceList;
 
 
     StackNavigationWrapper = {{StackNavigationWrapper}} {
@@ -109,49 +110,102 @@ live_design! {
                             color: #F4F5F7
                         }
 
-                        flow: Down
-                        padding: 20
-
-                        // 看板标题栏
-                        <View> {
-                            width: Fill, height: Fit
-                            flow: Right
-                            align: {y: 0.5}
-                            padding: {bottom: 20}
-
-                            <Label> {
-                                text: "看板"
-                                draw_text: {
-                                    text_style: <THEME_FONT_BOLD>{font_size: 24}
-                                    color: #172B4D
-                                }
-                            }
-
-                            <View> { width: Fill, height: Fit }
-
-                            create_board_button = <Button> {
-                                text: "创建看板"
-                                width: 120,
-                                height: 40,
-                                draw_bg: {
-                                    color: #0079BF
-                                }
-                                draw_text: {
-                                    color: #FFFFFF
-                                    text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                                }
-                            }
-                        }
-
-                        // 看板列表区域 - 显示所有看板
-                        <ScrollXYView> {
+                        <PageFlip> {
                             width: Fill, height: Fill
-                            scroll_bars: <ScrollBars> {
-                                show_scroll_x: false,
-                                show_scroll_y: true,
+                            lazy_init: true,
+                            active_page: boards_list_page
+
+                            // 看板列表页面
+                            boards_list_page = <View> {
+                                width: Fill, height: Fill
+                                flow: Down
+                                padding: 20
+
+                                // 看板标题栏
+                                <View> {
+                                    width: Fill, height: Fit
+                                    flow: Right
+                                    align: {y: 0.5}
+                                    padding: {bottom: 20}
+
+                                    <Label> {
+                                        text: "看板"
+                                        draw_text: {
+                                            text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                            color: #172B4D
+                                        }
+                                    }
+
+                                    <View> { width: Fill, height: Fit }
+
+                                    create_board_button = <Button> {
+                                        text: "创建看板"
+                                        width: 120,
+                                        height: 40,
+                                        draw_bg: {
+                                            color: #0079BF
+                                        }
+                                        draw_text: {
+                                            color: #FFFFFF
+                                            text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                        }
+                                    }
+                                }
+
+                                // 看板列表区域 - 显示所有看板
+                                <ScrollXYView> {
+                                    width: Fill, height: Fill
+                                    scroll_bars: <ScrollBars> {
+                                        show_scroll_x: false,
+                                        show_scroll_y: true,
+                                    }
+
+                                    <BoardsList> {}
+                                }
                             }
 
-                            <BoardsList> {}
+                            // 看板详情页面 - 显示列表和卡片
+                            board_detail_page = <View> {
+                                width: Fill, height: Fill
+                                flow: Down
+                                padding: 20
+
+                                // 看板详情标题栏
+                                <View> {
+                                    width: Fill, height: Fit
+                                    flow: Right
+                                    align: {y: 0.5}
+                                    padding: {bottom: 20}
+
+                                    back_to_boards_button = <Button> {
+                                        text: "← 返回"
+                                        width: 80,
+                                        height: 40,
+                                        margin: {right: 10}
+                                    }
+
+                                    board_title_label = <Label> {
+                                        text: "看板标题"
+                                        draw_text: {
+                                            text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                            color: #172B4D
+                                        }
+                                    }
+
+                                    <View> { width: Fill, height: Fit }
+                                }
+
+                                // 列表区域 - 显示所有列表和卡片
+                                <ScrollXYView> {
+                                    width: Fill, height: Fill
+                                    scroll_bars: <ScrollBars> {
+                                        show_scroll_x: true,
+                                        show_scroll_y: false,
+                                    }
+
+                                    <SpaceList> {}
+                                }
+                            }
                         }
                     }
 
@@ -214,49 +268,102 @@ live_design! {
                                         color: #F4F5F7
                                     }
 
-                                    flow: Down
-                                    padding: 20
-
-                                    // 看板标题栏
-                                    <View> {
-                                        width: Fill, height: Fit
-                                        flow: Right
-                                        align: {y: 0.5}
-                                        padding: {bottom: 20}
-
-                                        <Label> {
-                                            text: "看板"
-                                            draw_text: {
-                                                text_style: <THEME_FONT_BOLD>{font_size: 24}
-                                                color: #172B4D
-                                            }
-                                        }
-
-                                        <View> { width: Fill, height: Fit }
-
-                                        create_board_button = <Button> {
-                                            text: "创建看板"
-                                            width: 120,
-                                            height: 40,
-                                            draw_bg: {
-                                                color: #0079BF
-                                            }
-                                            draw_text: {
-                                                color: #FFFFFF
-                                                text_style: <THEME_FONT_REGULAR>{font_size: 14}
-                                            }
-                                        }
-                                    }
-
-                                    // 看板列表区域 - 显示所有看板
-                                    <ScrollXYView> {
+                                    <PageFlip> {
                                         width: Fill, height: Fill
-                                        scroll_bars: <ScrollBars> {
-                                            show_scroll_x: false,
-                                            show_scroll_y: true,
+                                        lazy_init: true,
+                                        active_page: boards_list_page
+
+                                        // 看板列表页面
+                                        boards_list_page = <View> {
+                                            width: Fill, height: Fill
+                                            flow: Down
+                                            padding: 20
+
+                                            // 看板标题栏
+                                            <View> {
+                                                width: Fill, height: Fit
+                                                flow: Right
+                                                align: {y: 0.5}
+                                                padding: {bottom: 20}
+
+                                                <Label> {
+                                                    text: "看板"
+                                                    draw_text: {
+                                                        text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                                        color: #172B4D
+                                                    }
+                                                }
+
+                                                <View> { width: Fill, height: Fit }
+
+                                                create_board_button = <Button> {
+                                                    text: "创建看板"
+                                                    width: 120,
+                                                    height: 40,
+                                                    draw_bg: {
+                                                        color: #0079BF
+                                                    }
+                                                    draw_text: {
+                                                        color: #FFFFFF
+                                                        text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                                                    }
+                                                }
+                                            }
+
+                                            // 看板列表区域 - 显示所有看板
+                                            <ScrollXYView> {
+                                                width: Fill, height: Fill
+                                                scroll_bars: <ScrollBars> {
+                                                    show_scroll_x: false,
+                                                    show_scroll_y: true,
+                                                }
+
+                                                <BoardsList> {}
+                                            }
                                         }
 
-                                        <BoardsList> {}
+                                        // 看板详情页面 - 显示列表和卡片
+                                        board_detail_page = <View> {
+                                            width: Fill, height: Fill
+                                            flow: Down
+                                            padding: 20
+
+                                            // 看板详情标题栏
+                                            <View> {
+                                                width: Fill, height: Fit
+                                                flow: Right
+                                                align: {y: 0.5}
+                                                padding: {bottom: 20}
+
+                                                back_to_boards_button = <Button> {
+                                                    text: "← 返回"
+                                                    width: 80,
+                                                    height: 40,
+                                                    margin: {right: 10}
+                                                }
+
+                                                board_title_label = <Label> {
+                                                    text: "看板标题"
+                                                    draw_text: {
+                                                        text_style: <THEME_FONT_BOLD>{font_size: 24}
+                                                        color: #172B4D
+                                                    }
+                                                }
+
+                                                <View> { width: Fill, height: Fit }
+                                            }
+
+                                            // 列表区域 - 显示所有列表和卡片
+                                            <ScrollXYView> {
+                                                width: Fill, height: Fill
+                                                scroll_bars: <ScrollBars> {
+                                                    show_scroll_x: true,
+                                                    show_scroll_y: false,
+                                                }
+
+                                                <SpaceList> {}
+                                            }
+                                        }
                                     }
                                 }
 
@@ -366,15 +473,53 @@ pub struct HomeScreen {
 
 impl Widget for HomeScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
-        // 处理创建看板按钮点击
+        // 先让子widget处理事件
+        self.view.handle_event(cx, event, scope);
+        
+        // 然后处理创建看板按钮点击
         if let Event::Actions(actions) = event {
-            if self.view.button(ids!(create_board_button)).clicked(actions) {
-                println!("HomeScreen: 创建看板按钮被点击");
+            // 尝试通过完整路径访问按钮
+            let page_flip = self.view.page_flip(ids!(home_screen_page_flip));
+            let button_ref = page_flip.button(ids!(create_board_button));
+            
+            if button_ref.clicked(actions) {
+                log!("Creating new kanban board...");
                 // 触发创建看板的 Action
                 cx.action(KanbanActions::CreateBoard {
                     name: "新看板".to_string(),
                     description: Some("这是一个新创建的看板".to_string()),
                 });
+            }
+            
+            // 处理返回按钮点击
+            let back_button = page_flip.button(ids!(back_to_boards_button));
+            if back_button.clicked(actions) {
+                log!("Back to boards list");
+                // 切换回看板列表页面
+                let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(PageFlip));
+                kanban_page_flip.set_active_page(cx, id!(boards_list_page));
+                self.view.redraw(cx);
+            }
+            
+            // 处理SelectBoard action
+            for action in actions {
+                if let Some(kanban_action) = action.downcast_ref::<KanbanActions>() {
+                    if let KanbanActions::SelectBoard(board_id) = kanban_action {
+                        log!("Selected board: {}", board_id);
+                        // 切换到看板详情页面
+                        let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(PageFlip));
+                        kanban_page_flip.set_active_page(cx, id!(board_detail_page));
+                        
+                        // 更新看板标题
+                        if let Some(app_state) = scope.data.get::<AppState>() {
+                            if let Some(board) = app_state.kanban_state.boards.get(board_id) {
+                                page_flip.label(ids!(board_title_label)).set_text(cx, &board.name);
+                            }
+                        }
+                        
+                        self.view.redraw(cx);
+                    }
+                }
             }
         }
 
@@ -473,8 +618,6 @@ impl Widget for HomeScreen {
                 }
             }
         }
-
-        self.view.handle_event(cx, event, scope);
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
