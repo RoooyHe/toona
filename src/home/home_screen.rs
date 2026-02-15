@@ -110,7 +110,7 @@ live_design! {
                             color: #F4F5F7
                         }
 
-                        <PageFlip> {
+                        kanban_page_flip = <PageFlip> {
                             width: Fill, height: Fill
                             lazy_init: true,
                             active_page: boards_list_page
@@ -268,7 +268,7 @@ live_design! {
                                         color: #F4F5F7
                                     }
 
-                                    <PageFlip> {
+                                    kanban_page_flip = <PageFlip> {
                                         width: Fill, height: Fill
                                         lazy_init: true,
                                         active_page: boards_list_page
@@ -478,50 +478,32 @@ impl Widget for HomeScreen {
         
         // 然后处理创建看板按钮点击
         if let Event::Actions(actions) = event {
+            log!("HomeScreen: Received {} actions", actions.len());
+            
             // 尝试通过完整路径访问按钮
             let page_flip = self.view.page_flip(ids!(home_screen_page_flip));
             let button_ref = page_flip.button(ids!(create_board_button));
             
             if button_ref.clicked(actions) {
-                log!("Creating new kanban board...");
-                // 触发创建看板的 Action
-                cx.action(KanbanActions::CreateBoard {
-                    name: "新看板".to_string(),
-                    description: Some("这是一个新创建的看板".to_string()),
+                log!("Creating new kanban list...");
+                // 触发创建列表的 Action
+                cx.action(KanbanActions::CreateList {
+                    name: "新列表".to_string(),
                 });
             }
             
             // 处理返回按钮点击
-            let back_button = page_flip.button(ids!(back_to_boards_button));
+            let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(kanban_page_flip));
+            let back_button = kanban_page_flip.button(ids!(back_to_boards_button));
             if back_button.clicked(actions) {
                 log!("Back to boards list");
                 // 切换回看板列表页面
-                let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(PageFlip));
                 kanban_page_flip.set_active_page(cx, id!(boards_list_page));
                 self.view.redraw(cx);
             }
             
-            // 处理SelectBoard action - 传递给 app.rs 处理
-            for action in actions {
-                if let Some(kanban_action) = action.downcast_ref::<KanbanActions>() {
-                    if let KanbanActions::SelectBoard(board_id) = kanban_action {
-                        log!("HomeScreen: Received SelectBoard action for board: {}", board_id);
-                        // 切换到看板详情页面
-                        let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(PageFlip));
-                        kanban_page_flip.set_active_page(cx, id!(board_detail_page));
-                        
-                        // 更新看板标题
-                        if let Some(app_state) = scope.data.get::<AppState>() {
-                            if let Some(board) = app_state.kanban_state.boards.get(board_id) {
-                                page_flip.label(ids!(board_title_label)).set_text(cx, &board.name);
-                            }
-                        }
-                        
-                        self.view.redraw(cx);
-                        // 不要 break，让 action 继续传递到 app.rs
-                    }
-                }
-            }
+            // 简化架构：不再需要 SelectBoard，直接显示所有列表
+            // 处理 KanbanActions 会在 app.rs 中统一处理
         }
 
         if let Event::Actions(actions) = event {
@@ -603,7 +585,7 @@ impl Widget for HomeScreen {
                                 self.previous_selection = app_state.selected_tab.clone();
                                 app_state.selected_tab = SelectedTab::Kanban;
                                 cx.action(NavigationBarAction::TabSelected(SelectedTab::Kanban));
-                                cx.action(KanbanActions::LoadBoards);
+                                cx.action(KanbanActions::LoadLists);
                                 self.update_active_page_from_selection(cx, app_state);
                                 self.view.redraw(cx);
                             }

@@ -1,144 +1,22 @@
 //! Matrix 适配层 - 将 Matrix Space/Room 映射到 Kanban 数据结构
 //!
-//! 架构设计：
-//! - Matrix Space = Kanban Board (看板)
+//! 简化架构设计：
+//! - Matrix Space = Kanban List (看板列表)
 //! - Matrix Room = Kanban Card (卡片)
-//! - Space 的子 Room = Board 中的 Card
-//! - Room State Events = Card 的元数据
+//! - Space 的子 Room = List 中的 Card
 //!
-//! 自定义 State Event 类型：
-//! - `m.kanban.card` - 卡片元数据（标题、描述、标签等）
-//! - `m.kanban.list` - 列表信息（待办、进行中、已完成）
-//! - `m.kanban.board` - 看板配置（背景色、标签定义等）
+//! Topic 标记：
+//! - `[kanban-list]` - 标识一个 Space 是看板列表
 
 use anyhow::{Context, Result};
 use makepad_widgets::log;
 use matrix_sdk::{
     Client,
     ruma::{
-        OwnedRoomId, OwnedUserId, RoomId,
+        OwnedRoomId, RoomId,
     },
     Room,
 };
-use serde::{Deserialize, Serialize};
-
-use crate::kanban::{
-    KanbanBoard, KanbanCard, KanbanList,
-    KanbanLabel,
-};
-
-/// Kanban 卡片状态事件类型
-pub const KANBAN_CARD_EVENT_TYPE: &str = "m.kanban.card";
-
-/// Kanban 列表状态事件类型
-pub const KANBAN_LIST_EVENT_TYPE: &str = "m.kanban.list";
-
-/// Kanban 看板状态事件类型
-pub const KANBAN_BOARD_EVENT_TYPE: &str = "m.kanban.board";
-
-/// Kanban 卡片元数据（存储在 Room State Event 中）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KanbanCardMetadata {
-    /// 卡片标题
-    pub title: String,
-    
-    /// 卡片描述
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    
-    /// 所属列表 ID（待办/进行中/已完成）
-    pub list_id: String,
-    
-    /// 排序位置
-    pub position: f64,
-    
-    /// 标签 ID 列表
-    #[serde(default)]
-    pub label_ids: Vec<String>,
-    
-    /// 截止日期
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub due_date: Option<String>,
-    
-    /// 是否已加星
-    #[serde(default)]
-    pub is_starred: bool,
-    
-    /// 是否已归档
-    #[serde(default)]
-    pub is_archived: bool,
-    
-    /// 创建时间
-    pub created_at: String,
-    
-    /// 更新时间
-    pub updated_at: String,
-}
-
-/// Kanban 看板元数据（存储在 Space State Event 中）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KanbanBoardMetadata {
-    /// 看板名称
-    pub name: String,
-    
-    /// 看板描述
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    
-    /// 背景颜色
-    #[serde(default = "default_background_color")]
-    pub background_color: String,
-    
-    /// 标签定义
-    #[serde(default)]
-    pub labels: Vec<KanbanLabel>,
-    
-    /// 列表定义（待办、进行中、已完成等）
-    #[serde(default = "default_lists")]
-    pub lists: Vec<ListDefinition>,
-    
-    /// 是否已归档
-    #[serde(default)]
-    pub is_archived: bool,
-    
-    /// 创建时间
-    pub created_at: String,
-    
-    /// 更新时间
-    pub updated_at: String,
-}
-
-fn default_background_color() -> String {
-    "#0079BF".to_string()
-}
-
-fn default_lists() -> Vec<ListDefinition> {
-    vec![
-        ListDefinition {
-            id: "todo".to_string(),
-            name: "待办".to_string(),
-            position: 1000.0,
-        },
-        ListDefinition {
-            id: "doing".to_string(),
-            name: "进行中".to_string(),
-            position: 2000.0,
-        },
-        ListDefinition {
-            id: "done".to_string(),
-            name: "已完成".to_string(),
-            position: 3000.0,
-        },
-    ]
-}
-
-/// 列表定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ListDefinition {
-    pub id: String,
-    pub name: String,
-    pub position: f64,
-}
 
 /// Matrix 到 Kanban 的适配器
 pub struct MatrixKanbanAdapter {
@@ -150,125 +28,52 @@ impl MatrixKanbanAdapter {
         Self { client }
     }
 
-    /// 从 Matrix Space 加载看板
-    pub async fn load_board(&self, space_id: &RoomId) -> Result<KanbanBoard> {
-        let space = self.client
-            .get_room(space_id)
-            .context("Space not found")?;
+    /// 获取所有看板 Space（带有 [kanban-list] topic 标记的 Space）
+    pub async fn get_all_kanban_spaces(&self) -> Result<Vec<crate::kanban::state::kanban_state::KanbanList>> {
+        let mut lists = Vec::new();
 
-        // 读取看板元数据
-        let metadata = self.read_board_metadata(&space).await?;
-
-        // 获取 Space 中的所有子 Room（卡片）
-        let _card_rooms = self.get_space_children(&space).await?;
-
-        // 构建列表 ID 列表
-        let list_ids: Vec<String> = metadata.lists.iter()
-            .map(|list| list.id.clone())
-            .collect();
-
-        Ok(KanbanBoard {
-            id: space_id.to_owned(),
-            name: metadata.name,
-            description: metadata.description,
-            background_color: metadata.background_color,
-            background_image: None,
-            labels: metadata.labels,
-            member_ids: self.get_room_members(&space).await?,
-            list_ids,
-            is_archived: metadata.is_archived,
-            created_at: metadata.created_at,
-            updated_at: metadata.updated_at,
-            extensions: Default::default(),
-        })
-    }
-
-    /// 从 Matrix Room 加载卡片
-    pub async fn load_card(&self, room_id: &RoomId, board_id: OwnedRoomId) -> Result<KanbanCard> {
-        let room = self.client
-            .get_room(room_id)
-            .context("Room not found")?;
-
-        // 读取卡片元数据
-        let metadata = self.read_card_metadata(&room).await?;
-
-        Ok(KanbanCard {
-            id: room_id.to_string(),
-            title: metadata.title,
-            description: metadata.description,
-            list_id: metadata.list_id,
-            board_id,
-            position: metadata.position,
-            label_ids: metadata.label_ids,
-            member_ids: self.get_room_members(&room).await?,
-            due_date: metadata.due_date.map(|date| crate::kanban::CardDueDate {
-                date,
-                is_completed: false,
-            }),
-            cover: None,
-            attachment_count: 0,
-            comment_count: 0,
-            checklists: Vec::new(),
-            is_starred: metadata.is_starred,
-            is_archived: metadata.is_archived,
-            created_at: metadata.created_at,
-            updated_at: metadata.updated_at,
-        })
-    }
-
-    /// 加载看板的所有列表
-    pub async fn load_lists(&self, board: &KanbanBoard) -> Result<Vec<KanbanList>> {
-        let space = self.client
-            .get_room(&board.id)
-            .context("Space not found")?;
-
-        let metadata = self.read_board_metadata(&space).await?;
-
-        Ok(metadata.lists.iter().map(|list_def| {
-            KanbanList {
-                id: list_def.id.clone(),
-                name: list_def.name.clone(),
-                board_id: board.id.clone(),
-                position: list_def.position,
-                is_archived: false,
-                card_ids: Vec::new(), // 将在后续填充
-                created_at: board.created_at.clone(),
-                updated_at: board.updated_at.clone(),
-            }
-        }).collect())
-    }
-
-    /// 加载列表中的所有卡片
-    pub async fn load_cards_in_list(
-        &self,
-        board_id: &RoomId,
-        list_id: &str,
-    ) -> Result<Vec<KanbanCard>> {
-        let space = self.client
-            .get_room(board_id)
-            .context("Space not found")?;
-
-        let card_rooms = self.get_space_children(&space).await?;
-        let mut cards = Vec::new();
-
-        for room in card_rooms {
-            if let Ok(metadata) = self.read_card_metadata(&room).await {
-                if metadata.list_id == list_id && !metadata.is_archived {
-                    if let Ok(card) = self.load_card(room.room_id(), board_id.to_owned()).await {
-                        cards.push(card);
-                    }
+        // 获取用户的所有 Room
+        let all_rooms = self.client.rooms();
+        
+        for room in all_rooms {
+            let room_id = room.room_id();
+            
+            // 检查topic中是否有[kanban-list]标记
+            if let Some(topic) = room.topic() {
+                if topic.contains("[kanban-list]") {
+                    // 提取列表名称（去掉标记）
+                    let name = topic.trim_start_matches("[kanban-list]").trim();
+                    let name = if name.is_empty() {
+                        room.display_name().await?.to_string()
+                    } else {
+                        name.to_string()
+                    };
+                    
+                    // 获取 Space 中的所有子 Room（卡片）
+                    let card_rooms = self.get_space_children(&room).await?;
+                    let card_ids: Vec<OwnedRoomId> = card_rooms.iter()
+                        .map(|r| r.room_id().to_owned())
+                        .collect();
+                    
+                    let card_count = card_ids.len();
+                    
+                    lists.push(crate::kanban::state::kanban_state::KanbanList {
+                        id: room_id.to_owned(),
+                        name,
+                        card_ids,
+                        position: 1000.0, // TODO: 从 state event 读取
+                    });
+                    
+                    log!("Found kanban list: {} ({}) with {} cards", lists.last().unwrap().name, room_id, card_count);
                 }
             }
         }
 
-        // 按位置排序
-        cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
-
-        Ok(cards)
+        Ok(lists)
     }
 
-    /// 创建新看板（Matrix Space）
-    pub async fn create_board(&self, name: &str, description: Option<String>) -> Result<OwnedRoomId> {
+    /// 创建新的看板 Space（列表）
+    pub async fn create_space(&self, name: &str) -> Result<OwnedRoomId> {
         use matrix_sdk::ruma::{
             api::client::room::create_room::v3::{Request as CreateRoomRequest, RoomPreset},
             events::room::topic::RoomTopicEventContent,
@@ -277,97 +82,36 @@ impl MatrixKanbanAdapter {
         // 构建创建 Space 的请求
         let mut request = CreateRoomRequest::new();
         request.name = Some(name.to_string());
-        request.preset = Some(RoomPreset::PrivateChat); // 私有空间
+        request.preset = Some(RoomPreset::PrivateChat);
         request.is_direct = false;
         
         // 创建 Space
         let room = self.client.create_room(request).await
-            .context("Failed to create board space")?;
+            .context("Failed to create kanban space")?;
 
-        // Get the room_id from the Room object
-        let board_id = room.room_id().to_owned();
+        let space_id = room.room_id().to_owned();
         
-        // 创建后立即设置topic（包含[kanban]标记）
-        let topic_with_marker = if let Some(ref desc) = description {
-            format!("[kanban] {}", desc)
-        } else {
-            "[kanban]".to_string()
-        };
+        // 设置 topic（包含 [kanban-list] 标记）
+        let topic_with_marker = format!("[kanban-list] {}", name);
         
-        log!("Setting topic for board {}: {}", board_id, topic_with_marker);
+        log!("Setting topic for space {}: {}", space_id, topic_with_marker);
         
-        // 发送topic状态事件
         let topic_content = RoomTopicEventContent::new(topic_with_marker);
         room.send_state_event(topic_content).await
-            .context("Failed to set board topic")?;
+            .context("Failed to set space topic")?;
 
-        // 创建默认列表
-        let default_lists = vec![
-            ListDefinition {
-                id: "todo".to_string(),
-                name: "待办".to_string(),
-                position: 1000.0,
-            },
-            ListDefinition {
-                id: "in_progress".to_string(),
-                name: "进行中".to_string(),
-                position: 2000.0,
-            },
-            ListDefinition {
-                id: "done".to_string(),
-                name: "已完成".to_string(),
-                position: 3000.0,
-            },
-        ];
-
-        // 保存看板元数据（包含列表定义）
-        let board_metadata = KanbanBoardMetadata {
-            name: name.to_string(),
-            description: description.clone(),
-            lists: default_lists,
-            background_color: "#0079BF".to_string(),
-            labels: Vec::new(),
-            is_archived: false,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        };
-
-        let metadata_json = serde_json::value::to_raw_value(&board_metadata)
-            .context("Failed to serialize board metadata")?;
-        
-        room.send_state_event_raw(
-            KANBAN_BOARD_EVENT_TYPE,
-            "",
-            metadata_json,
-        ).await.context("Failed to save board metadata")?;
-
-        log!("Created kanban board space: {} ({}) with {} default lists", name, board_id, board_metadata.lists.len());
-        Ok(board_id)
+        log!("Created kanban space: {} ({})", name, space_id);
+        Ok(space_id)
     }
 
-    /// 创建新卡片（Matrix Room）
+    /// 创建新卡片（Matrix Room）并添加到 Space
     pub async fn create_card(
         &self,
-        board_id: &RoomId,
-        list_id: &str,
+        space_id: &RoomId,
         title: &str,
     ) -> Result<OwnedRoomId> {
         use matrix_sdk::ruma::{
             api::client::room::create_room::v3::{Request as CreateRoomRequest, RoomPreset},
-        };
-
-        // 创建卡片元数据
-        let _metadata = KanbanCardMetadata {
-            title: title.to_string(),
-            description: None,
-            list_id: list_id.to_string(),
-            position: 1000.0, // 默认位置
-            label_ids: Vec::new(),
-            due_date: None,
-            is_starred: false,
-            is_archived: false,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
         };
 
         // 构建创建 Room 的请求
@@ -380,321 +124,86 @@ impl MatrixKanbanAdapter {
         let room = self.client.create_room(request).await
             .context("Failed to create card room")?;
 
-        // Get the room_id from the Room object
         let card_room_id = room.room_id().to_owned();
 
-        // 保存卡片元数据到 Room 的 state event
-        if let Some(card_room) = self.client.get_room(&card_room_id) {
-            let metadata_json = serde_json::value::to_raw_value(&_metadata)
-                .context("Failed to serialize card metadata")?;
-            
-            let _ = card_room.send_state_event_raw(
-                KANBAN_CARD_EVENT_TYPE,
-                "",
-                metadata_json,
-            ).await;
-        }
+        // 将卡片 Room 添加到 Space
+        self.add_card_to_space(space_id, &card_room_id).await?;
 
-        // 将卡片 Room 添加到看板 Space
-        self.add_card_to_board(board_id, &card_room_id).await?;
-
-        log!("Created kanban card: {} in board {} ({})", title, board_id, card_room_id);
+        log!("Created kanban card: {} in space {} ({})", title, space_id, card_room_id);
         Ok(card_room_id)
     }
 
-    /// 将卡片添加到看板（设置 Space 子关系）
-    async fn add_card_to_board(&self, board_id: &RoomId, card_room_id: &RoomId) -> Result<()> {
-        let space = self.client
-            .get_room(board_id)
-            .context("Board space not found")?;
+    /// 从 Matrix Room 加载卡片（简化版）
+    pub async fn load_card(&self, room_id: &RoomId, space_id: OwnedRoomId) -> Result<crate::kanban::state::kanban_state::KanbanCard> {
+        let room = self.client
+            .get_room(room_id)
+            .context("Room not found")?;
 
-        // 创建 m.space.child 事件
+        let display_name = room.display_name().await?;
+        let title = display_name.to_string();
+        
+        // TODO: 从 state event 读取描述和位置
+        Ok(crate::kanban::state::kanban_state::KanbanCard {
+            id: room_id.to_owned(),
+            title,
+            description: None,
+            space_id,
+            position: 1000.0,
+        })
+    }
+
+    /// 将卡片添加到 Space（设置 Space 子关系）
+    async fn add_card_to_space(&self, space_id: &RoomId, card_room_id: &RoomId) -> Result<()> {
+        let space = self.client
+            .get_room(space_id)
+            .context("Space not found")?;
+
         use matrix_sdk::ruma::events::space::child::SpaceChildEventContent;
         
         let child_content = SpaceChildEventContent::new(vec![]);
         
-        // 使用 state_key 为 card_room_id 发送 m.space.child 事件
         space.send_state_event_raw(
             "m.space.child",
             card_room_id.as_str(),
             serde_json::value::to_raw_value(&child_content)
                 .context("Failed to serialize space child content")?,
-        ).await.context("Failed to add card to board space")?;
+        ).await.context("Failed to add card to space")?;
 
-        log!("Added card {} to board {}", card_room_id, board_id);
+        log!("Added card {} to space {}", card_room_id, space_id);
         Ok(())
-    }
-
-    /// 更新卡片元数据
-    pub async fn update_card_metadata(
-        &self,
-        room_id: &RoomId,
-        metadata: KanbanCardMetadata,
-    ) -> Result<()> {
-        let _room = self.client
-            .get_room(room_id)
-            .context("Card room not found")?;
-
-        // TODO: 序列化元数据并发送状态事件
-        // 需要正确的 send_state_event_raw API
-        let _ = metadata;
-        /*
-        let metadata_raw = serde_json::value::to_raw_value(&metadata)
-            .context("Failed to serialize card metadata")?;
-
-        room.send_state_event_raw(
-            KANBAN_CARD_EVENT_TYPE.to_string(),
-            "".to_string(),
-            Raw::from_json(metadata_raw),
-        ).await.context("Failed to update card metadata")?;
-        */
-
-        log!("Updated card metadata for {}", room_id);
-        Ok(())
-    }
-
-    /// 移动卡片到不同列表
-    pub async fn move_card(
-        &self,
-        room_id: &RoomId,
-        new_list_id: &str,
-        new_position: f64,
-    ) -> Result<()> {
-        let room = self.client
-            .get_room(room_id)
-            .context("Room not found")?;
-
-        let mut metadata = self.read_card_metadata(&room).await?;
-        metadata.list_id = new_list_id.to_string();
-        metadata.position = new_position;
-        metadata.updated_at = chrono::Utc::now().to_rfc3339();
-
-        self.update_card_metadata(room_id, metadata).await
-    }
-
-    /// 获取所有看板（Spaces）
-    pub async fn get_all_boards(&self) -> Result<Vec<KanbanBoard>> {
-        let mut boards = Vec::new();
-
-        // 获取用户的所有 Room
-        let all_rooms = self.client.rooms();
-        
-        for room in all_rooms {
-            let room_id = room.room_id();
-            
-            // 检查topic中是否有[kanban]标记（这是我们识别看板的主要方式）
-            if let Some(topic) = room.topic() {
-                if topic.contains("[kanban]") {
-                    // 尝试加载为看板
-                    match self.load_board(room_id).await {
-                        Ok(board) => {
-                            boards.push(board);
-                        },
-                        Err(e) => {
-                            log!("Failed to load board {}: {}", room_id, e);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(boards)
-    }
-
-    /// 更新看板元数据
-    pub async fn update_board_metadata(
-        &self,
-        board_id: &RoomId,
-        metadata: KanbanBoardMetadata,
-    ) -> Result<()> {
-        let _space = self.client
-            .get_room(board_id)
-            .context("Board space not found")?;
-
-        // TODO: 序列化元数据并发送状态事件
-        // 需要正确的 send_state_event_raw API
-        let _ = metadata;
-        /*
-        let metadata_raw = serde_json::value::to_raw_value(&metadata)
-            .context("Failed to serialize board metadata")?;
-
-        space.send_state_event_raw(
-            KANBAN_BOARD_EVENT_TYPE.to_string(),
-            "".to_string(),
-            Raw::from_json(metadata_raw),
-        ).await.context("Failed to update board metadata")?;
-        */
-
-        log!("Updated board metadata for {}", board_id);
-        Ok(())
-    }
-
-    /// 删除卡片
-    pub async fn delete_card(&self, room_id: &RoomId) -> Result<()> {
-        let room = self.client
-            .get_room(room_id)
-            .context("Card room not found")?;
-
-        // 归档卡片而不是删除
-        let mut metadata = self.read_card_metadata(&room).await?;
-        metadata.is_archived = true;
-        metadata.updated_at = chrono::Utc::now().to_rfc3339();
-
-        self.update_card_metadata(room_id, metadata).await
-    }
-
-    /// 更新卡片标题
-    pub async fn update_card_title(&self, room_id: &RoomId, new_title: &str) -> Result<()> {
-        let room = self.client
-            .get_room(room_id)
-            .context("Card room not found")?;
-
-        let mut metadata = self.read_card_metadata(&room).await?;
-        metadata.title = new_title.to_string();
-        metadata.updated_at = chrono::Utc::now().to_rfc3339();
-
-        self.update_card_metadata(room_id, metadata).await?;
-
-        // 同时更新 Room 的名称
-        use matrix_sdk::ruma::events::room::name::RoomNameEventContent;
-        room.send_state_event(RoomNameEventContent::new(new_title.to_string())).await
-            .context("Failed to update room name")?;
-
-        Ok(())
-    }
-
-    /// 更新卡片描述
-    pub async fn update_card_description(&self, room_id: &RoomId, description: Option<String>) -> Result<()> {
-        let room = self.client
-            .get_room(room_id)
-            .context("Card room not found")?;
-
-        let mut metadata = self.read_card_metadata(&room).await?;
-        metadata.description = description;
-        metadata.updated_at = chrono::Utc::now().to_rfc3339();
-
-        self.update_card_metadata(room_id, metadata).await
-    }
-
-    // ========== 私有辅助方法 ==========
-
-    /// 读取看板元数据
-    async fn read_board_metadata(&self, space: &Room) -> Result<KanbanBoardMetadata> {
-        // TODO: 实现正确的状态事件读取
-        // 暂时从Space的基本属性中提取信息
-        let display_name = space.display_name().await?;
-        let name = display_name.to_string();
-        
-        // 从topic中提取描述，去掉[kanban]标记
-        let description = space.topic().and_then(|topic| {
-            if topic.starts_with("[kanban]") {
-                let desc = topic.trim_start_matches("[kanban]").trim();
-                if desc.is_empty() {
-                    None
-                } else {
-                    Some(desc.to_string())
-                }
-            } else {
-                Some(topic.to_string())
-            }
-        });
-        
-        log!("Loaded board metadata for {}: name='{}', description={:?}", space.room_id(), name, description);
-        
-        Ok(KanbanBoardMetadata {
-            name,
-            description,
-            background_color: default_background_color(),
-            labels: Vec::new(),
-            lists: default_lists(),
-            is_archived: false,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        })
-    }
-
-    /// 读取卡片元数据
-    async fn read_card_metadata(&self, room: &Room) -> Result<KanbanCardMetadata> {
-        // TODO: 实现正确的状态事件读取
-        // 暂时使用默认值
-        log!("No card metadata found for {}, using defaults", room.room_id());
-        let display_name = room.display_name().await?;
-        let title = display_name.to_string();
-        
-        Ok(KanbanCardMetadata {
-            title,
-            description: None,
-            list_id: "todo".to_string(),
-            position: 1000.0,
-            label_ids: Vec::new(),
-            due_date: None,
-            is_starred: false,
-            is_archived: false,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        })
     }
 
     /// 获取 Space 的所有子 Room
-    async fn get_space_children(&self, _space: &Room) -> Result<Vec<Room>> {
-        let children = Vec::new();
+    async fn get_space_children(&self, space: &Room) -> Result<Vec<Room>> {
+        let mut children = Vec::new();
 
-        // 获取所有 m.space.child 状态事件
-        // 注意：这需要遍历所有状态事件，因为每个子 Room 都有一个独立的状态事件
-        // state_key 是子 Room 的 ID
+        // 获取所有房间并检查它们是否是这个 Space 的子房间
+        // 通过检查 m.space.child 状态事件来确定父子关系
+        let all_rooms = self.client.rooms();
         
-        // 方法 1：使用 Space 的 children 方法（如果 SDK 支持）
-        // 方法 2：手动读取状态事件
+        for room in all_rooms {
+            // 检查 space 中是否有指向这个 room 的 m.space.child 事件
+            // state_key 应该是 room 的 ID
+            let room_id_str = room.room_id().as_str();
+            
+            // 尝试获取 m.space.child 状态事件
+            match space.get_state_event(matrix_sdk::ruma::events::StateEventType::SpaceChild, room_id_str).await {
+                Ok(Some(_)) => {
+                    // 找到了 m.space.child 事件，说明这是一个子房间
+                    log!("Found child room: {} in space {}", room_id_str, space.room_id());
+                    children.push(room);
+                }
+                Ok(None) => {
+                    // 没有找到事件，不是子房间
+                }
+                Err(e) => {
+                    // 获取状态事件失败，可能是权限问题或网络问题
+                    log!("Failed to get space child event for {}: {:?}", room_id_str, e);
+                }
+            }
+        }
         
-        // 这里我们使用一个简化的实现
-        // 实际上需要调用 space.get_state_events() 并过滤 m.space.child 类型
-        
-        // 临时实现：返回空列表
-        // TODO: 实现完整的 Space 子 Room 查询
-        log!("get_space_children not fully implemented yet, returning empty list");
-        
+        log!("Found {} child rooms in space {}", children.len(), space.room_id());
         Ok(children)
-    }
-
-    /// 获取 Room 的成员列表
-    async fn get_room_members(&self, room: &Room) -> Result<Vec<OwnedUserId>> {
-        let members = room.members(matrix_sdk::RoomMemberships::ACTIVE).await?;
-        Ok(members.iter().map(|m| m.user_id().to_owned()).collect())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_lists() {
-        let lists = default_lists();
-        assert_eq!(lists.len(), 3);
-        assert_eq!(lists[0].id, "todo");
-        assert_eq!(lists[1].id, "doing");
-        assert_eq!(lists[2].id, "done");
-    }
-
-    #[test]
-    fn test_kanban_card_metadata_serialization() {
-        let metadata = KanbanCardMetadata {
-            title: "测试卡片".to_string(),
-            description: Some("这是一个测试".to_string()),
-            list_id: "todo".to_string(),
-            position: 1000.0,
-            label_ids: vec!["label1".to_string()],
-            due_date: None,
-            is_starred: false,
-            is_archived: false,
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-            updated_at: "2024-01-01T00:00:00Z".to_string(),
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        let deserialized: KanbanCardMetadata = serde_json::from_str(&json).unwrap();
-        
-        assert_eq!(deserialized.title, metadata.title);
-        assert_eq!(deserialized.list_id, metadata.list_id);
     }
 }

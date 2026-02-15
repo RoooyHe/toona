@@ -1,150 +1,56 @@
-use matrix_sdk::ruma::{OwnedRoomId, OwnedUserId};
-use crate::kanban::data::models::*;
+use matrix_sdk::ruma::OwnedRoomId;
+use crate::kanban::state::kanban_state::{KanbanList, KanbanCard};
 
-/// 看板应用动作
+/// 看板应用动作（简化版）
 #[derive(Debug, Clone)]
 pub enum KanbanActions {
-    /// 加载看板列表
-    LoadBoards,
-    
-    /// 看板列表已加载
-    BoardsLoaded(Vec<KanbanBoard>),
+    /// 加载所有列表（Space）
+    LoadLists,
     
     /// 列表已加载
     ListLoaded(KanbanList),
     
     /// 卡片已加载
     CardLoaded(KanbanCard),
-
-    /// 选择看板
-    SelectBoard(OwnedRoomId),
-
-    /// 创建看板
-    CreateBoard {
+    
+    /// 创建新列表（Space）
+    CreateList {
         name: String,
+    },
+    
+    /// 创建新卡片（Room）
+    CreateCard {
+        space_id: OwnedRoomId,
+        title: String,
+    },
+    
+    /// 移动卡片到不同列表
+    MoveCard {
+        card_id: OwnedRoomId,
+        target_space_id: OwnedRoomId,
+        position: f64,
+    },
+    
+    /// 更新卡片标题
+    UpdateCardTitle {
+        card_id: OwnedRoomId,
+        title: String,
+    },
+    
+    /// 更新卡片描述
+    UpdateCardDescription {
+        card_id: OwnedRoomId,
         description: Option<String>,
     },
-
-    /// 更新看板
-    UpdateBoard {
-        board_id: OwnedRoomId,
-        updates: BoardUpdateRequest,
-    },
-
-    /// 删除看板
-    DeleteBoard { board_id: OwnedRoomId },
-
-    /// 加载列表
-    LoadLists { board_id: OwnedRoomId },
-
-    /// 创建列表
-    CreateList { board_id: OwnedRoomId, name: String },
-
-    /// 更新列表
-    UpdateList {
-        board_id: OwnedRoomId,
-        list_id: String,
-        updates: ListUpdateRequest,
-    },
-
-    /// 删除列表
-    DeleteList {
-        board_id: OwnedRoomId,
-        list_id: String,
-    },
-
-    /// 移动列表
-    MoveList {
-        board_id: OwnedRoomId,
-        list_id: String,
-        new_position: f64,
-    },
-
-    /// 加载卡片
-    LoadCards {
-        board_id: OwnedRoomId,
-        list_id: String,
-    },
-
-    /// 创建卡片
-    CreateCard {
-        board_id: OwnedRoomId,
-        list_id: String,
-        name: String,
-    },
-
-    /// 更新卡片
-    UpdateCard {
-        board_id: OwnedRoomId,
-        card_id: String,
-        updates: CardUpdateRequest,
-    },
-
+    
     /// 删除卡片
     DeleteCard {
-        board_id: OwnedRoomId,
-        card_id: String,
+        card_id: OwnedRoomId,
     },
-
-    /// 移动卡片
-    MoveCard {
-        board_id: OwnedRoomId,
-        card_id: String,
-        from_list: String,
-        to_list: String,
-        new_position: f64,
-    },
-
-    /// 归档卡片
-    ArchiveCard {
-        board_id: OwnedRoomId,
-        card_id: String,
-        archived: bool,
-    },
-
-    /// 设置筛选条件
-    SetFilter(KanbanFilterState),
-
-    /// 设置排序条件
-    SetSort(KanbanSortState),
-
-    /// 搜索卡片
-    Search {
-        board_id: OwnedRoomId,
-        query: String,
-    },
-
-    /// 错误处理
-    Error(String),
-
-    /// 加载中
+    
+    /// 设置加载状态
     Loading(bool),
-}
-
-/// 看板更新请求
-#[derive(Debug, Clone, Default)]
-pub struct BoardUpdateRequest {
-    pub name: Option<String>,
-    pub description: Option<Option<String>>,
-    pub background_color: Option<String>,
-    pub background_image: Option<Option<String>>,
-}
-
-/// 列表更新请求
-#[derive(Debug, Clone, Default)]
-pub struct ListUpdateRequest {
-    pub name: Option<String>,
-    pub archived: Option<bool>,
-}
-
-/// 卡片更新请求
-#[derive(Debug, Clone, Default)]
-pub struct CardUpdateRequest {
-    pub title: Option<String>,
-    pub description: Option<Option<String>>,
-    pub label_ids: Option<Vec<String>>,
-    pub member_ids: Option<Vec<OwnedUserId>>,
-    pub due_date: Option<Option<CardDueDate>>,
-    pub is_starred: Option<bool>,
-    pub archived: Option<bool>,
+    
+    /// 错误
+    Error(String),
 }

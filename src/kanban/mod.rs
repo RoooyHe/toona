@@ -12,17 +12,10 @@ pub mod models;
 pub mod components;
 
 // Re-export main types for convenience
-pub use data::models::*;
-pub use state::kanban_state::*;
-pub use state::kanban_actions::*;
-pub use matrix_adapter::{
-    MatrixKanbanAdapter,
-    KanbanCardMetadata,
-    KanbanBoardMetadata,
-    KANBAN_CARD_EVENT_TYPE,
-    KANBAN_LIST_EVENT_TYPE,
-    KANBAN_BOARD_EVENT_TYPE,
-};
+// 使用简化的数据模型
+pub use state::kanban_state::{KanbanList, KanbanCard, KanbanAppState};
+pub use state::kanban_actions::KanbanActions;
+pub use matrix_adapter::MatrixKanbanAdapter;
 
 pub fn live_design(cx: &mut Cx) {
     components::live_design(cx);

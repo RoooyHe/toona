@@ -21,7 +21,8 @@ pub enum KanbanRequest {
     /// 更新看板
     UpdateBoard {
         board_id: OwnedRoomId,
-        updates: crate::kanban::state::kanban_actions::BoardUpdateRequest,
+        // TODO: 简化架构后不再需要
+        // updates: crate::kanban::state::kanban_actions::BoardUpdateRequest,
     },
 
     /// 删除看板

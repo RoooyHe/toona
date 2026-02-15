@@ -1,11 +1,10 @@
 use makepad_widgets::*;
-use crate::kanban::KanbanActions;
 
 live_design! {
     use link::theme::*;
     use link::widgets::*;
 
-    pub BoardCard = <View> {
+    pub BoardCard = {{BoardCard}} {
         width: 250,
         height: 150,
         margin: 10,
@@ -66,25 +65,20 @@ impl Widget for BoardCard {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
         
-        // 处理点击事件
-        if let Event::MouseDown(_) = event {
-            if let Some(board_id_str) = &self.board_id {
-                log!("BoardCard: Clicked on board {}", board_id_str);
-                // 解析 board_id 字符串为 OwnedRoomId
-                if let Ok(board_id) = board_id_str.parse() {
-                    log!("BoardCard: Sending SelectBoard action");
-                    cx.widget_action(
-                        self.widget_uid(),
-                        &scope.path,
-                        KanbanActions::SelectBoard(board_id)
-                    );
+        // 处理点击事件 - 使用 Hit 来检测点击
+        match event.hits(cx, self.view.area()) {
+            Hit::FingerUp(f) => {
+                if f.was_tap() {
+                    // 简化架构：不再需要 SelectBoard，直接显示所有列表
+                    log!("BoardCard: Clicked (simplified architecture - no board selection needed)");
                 }
             }
+            _ => {}
         }
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 scope.props 获取 board_id
+        // 从 scope.props 获取 board_id（简化架构后不再使用）
         if let Some(board_id) = scope.props.get::<String>() {
             self.board_id = Some(board_id.clone());
         }
@@ -107,35 +101,37 @@ impl Widget for BoardsList {
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
-                // 获取看板数据
-                let boards: Vec<_> = {
+                // 简化架构：显示所有列表（Space）而不是看板
+                let lists: Vec<_> = {
                     if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                        app_state.kanban_state.boards.values().cloned().collect()
+                        app_state.kanban_state.all_lists().into_iter().map(|l| l.clone()).collect()
                     } else {
                         Vec::new()
                     }
                 };
                 
-                list.set_item_range(cx, 0, boards.len());
+                list.set_item_range(cx, 0, lists.len());
 
-                while let Some(board_idx) = list.next_visible_item(cx) {
-                    if board_idx >= boards.len() {
+                while let Some(list_idx) = list.next_visible_item(cx) {
+                    if list_idx >= lists.len() {
                         continue;
                     }
 
-                    let board = &boards[board_idx];
+                    let kanban_list = &lists[list_idx];
 
-                    let board_item = list.item(cx, board_idx, live_id!(Board));
+                    let list_item = list.item(cx, list_idx, live_id!(Board));
 
-                    // 设置看板名称
-                    board_item
+                    // 设置列表名称
+                    list_item
                         .label(ids!(board_name_label))
-                        .set_text(cx, &board.name);
+                        .set_text(cx, &kanban_list.name);
                     
-                    // 传递 board_id 给 BoardCard 并立即绘制
-                    let board_id_str = board.id.to_string();
-                    let mut board_scope = Scope::with_props(&board_id_str);
-                    board_item.draw_all(cx, &mut board_scope);
+                    // 传递 space_id 给 BoardCard 并立即绘制
+                    let space_id_str = kanban_list.id.to_string();
+                    if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
+                        let mut list_scope = Scope::with_data_props(app_state, &space_id_str);
+                        list_item.draw_all(cx, &mut list_scope);
+                    }
                 }
             }
         }

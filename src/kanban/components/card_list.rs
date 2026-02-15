@@ -1,5 +1,4 @@
 use makepad_widgets::*;
-use crate::kanban::KanbanAppState;
 
 live_design! {
     use link::theme::*;
@@ -101,19 +100,21 @@ impl Widget for CardList {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 scope.props 获取 list_id
-        let list_id = if let Some(list_id) = scope.props.get::<String>() {
-            list_id.clone()
+        // 从 scope.props 获取 space_id (简化架构：Space = List)
+        let space_id = if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
+            space_id.clone()
         } else {
             return DrawStep::done();
         };
         
         // 获取卡片数据并克隆，避免借用冲突
-        let cards: Vec<_> = if let Some(state) = scope.data.get::<KanbanAppState>() {
-            state.list_cards(&list_id).into_iter().map(|c| c.clone()).collect()
+        let cards: Vec<_> = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+            app_state.kanban_state.list_cards(&space_id).into_iter().map(|c| c.clone()).collect()
         } else {
             Vec::new()
         };
+        
+        log!("CardList: space_id='{}', found {} cards", space_id, cards.len());
 
         // 隐藏新卡片输入框（暂时不实现）
         self.view.view(ids!(new_card_input)).apply_over(cx, live! { visible: false });
@@ -142,9 +143,10 @@ impl Widget for CardList {
 
                     // 传递 card_id 给 CardItem
                     let card_id = card.id.clone();
-                    let state_mut = scope.data.get_mut::<KanbanAppState>().unwrap();
-                    let mut card_scope = Scope::with_data_props(state_mut, &card_id);
-                    card_item.draw_all(cx, &mut card_scope);
+                    if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
+                        let mut card_scope = Scope::with_data_props(&mut app_state.kanban_state, &card_id);
+                        card_item.draw_all(cx, &mut card_scope);
+                    }
                 }
             }
         }

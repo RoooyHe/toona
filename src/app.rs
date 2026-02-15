@@ -18,7 +18,7 @@ use crate::{
         JoinLeaveModalKind, JoinLeaveRoomModalAction, JoinLeaveRoomModalWidgetRefExt,
     },
     kanban::{
-        KanbanActions, KanbanAppState, KanbanBoard, KanbanCard, KanbanFilterState, KanbanList,
+        KanbanActions, KanbanAppState,
     },
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
@@ -44,7 +44,6 @@ use matrix_sdk::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 live_design! {
     use link::theme::*;
@@ -730,331 +729,116 @@ impl App {
     fn handle_kanban_action(&mut self, cx: &mut Cx, action: KanbanActions) {
         let state = &mut self.app_state.kanban_state;
         match action {
-            KanbanActions::LoadBoards => {
-                // Try to load boards from Matrix
+            KanbanActions::LoadLists => {
+                // 加载所有 kanban Space（列表）
                 if get_client().is_some() {
-                    // Spawn async task to load boards from Matrix
-                    submit_async_request(MatrixRequest::LoadKanbanBoards);
+                    submit_async_request(MatrixRequest::LoadKanbanLists);
                     state.loading = true;
-                } else {
-                    // Fallback to seed data if no client available
-                    if state.boards.is_empty() {
-                        let board = Self::seed_board(state, "示例看板", None);
-                        state.current_board_id = Some(board.id.clone());
-                    }
-                }
-            }
-            KanbanActions::BoardsLoaded(boards) => {
-                // Clear existing boards and cards, but NOT lists (they were already loaded)
-                state.boards.clear();
-                state.cards.clear();
-                
-                // Add loaded boards
-                for board in boards {
-                    log!("Adding board: {} with {} list_ids", board.name, board.list_ids.len());
-                    for list_id in &board.list_ids {
-                        log!("  - board.list_id: '{}'", list_id);
-                    }
-                    state.boards.insert(board.id.clone(), board);
-                }
-                
-                // Select first board if none selected
-                if state.current_board_id.is_none() && !state.boards.is_empty() {
-                    state.current_board_id = state.boards.keys().next().cloned();
-                    if let Some(board_id) = &state.current_board_id {
-                        log!("Selected first board: {}", board_id);
-                    }
-                }
-                
-                log!("Loaded {} boards into state", state.boards.len());
-                log!("Current lists in state.lists HashMap:");
-                for (key, list) in &state.lists {
-                    log!("  - state.lists key: '{}', list.name: '{}'", key, list.name);
-                }
-                state.loading = false;
-                self.ui.redraw(cx);
-            }
-            KanbanActions::ListLoaded(list) => {
-                // Add list to state
-                log!("ListLoaded action: list.id='{}', list.name='{}'", list.id, list.name);
-                state.lists.insert(list.id.clone(), list);
-                log!("Total lists in state: {}", state.lists.len());
-                self.ui.redraw(cx);
-            }
-            KanbanActions::SelectBoard(board_id) => {
-                if state.boards.contains_key(&board_id) {
-                    state.current_board_id = Some(board_id.clone());
-                    
-                    // Load lists for the selected board
-                    if get_client().is_some() {
-                        submit_async_request(MatrixRequest::LoadKanbanLists { board_id });
-                        state.loading = true;
-                    }
-                }
-            }
-            KanbanActions::CreateBoard { name, description } => {
-                // Submit async request to create board in Matrix
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::CreateKanbanBoard {
-                        name: name.clone(),
-                        description: description.clone(),
-                    });
-                    state.loading = true;
-                } else {
-                    // Fallback to local creation if no client
-                    let board = Self::seed_board(state, &name, description.clone());
-                    state.current_board_id = Some(board.id.clone());
                 }
             }
 
-            KanbanActions::UpdateBoard { board_id, updates } => {
-                if let Some(board) = state.boards.get_mut(&board_id) {
-                    if let Some(name) = updates.name {
-                        board.name = name;
-                    }
-                    if let Some(description) = updates.description {
-                        board.description = description;
-                    }
-                    if let Some(background_color) = updates.background_color {
-                        board.background_color = background_color;
-                    }
-                    if let Some(background_image) = updates.background_image {
-                        board.background_image = background_image;
-                    }
-                    board.updated_at = chrono::Utc::now().to_rfc3339();
-                }
+            KanbanActions::ListLoaded(list) => {
+                // 列表已加载
+                log!("ListLoaded: space_id='{}', name='{}'", list.id, list.name);
+                state.upsert_list(list);
+                self.ui.redraw(cx);
             }
-            KanbanActions::DeleteBoard { board_id } => {
-                if let Some(board) = state.boards.remove(&board_id) {
-                    for list_id in board.list_ids {
-                        if let Some(list) = state.lists.remove(&list_id) {
-                            for card_id in list.card_ids {
-                                state.cards.remove(&card_id);
-                            }
-                        }
-                    }
-                    if state.current_board_id.as_ref() == Some(&board_id) {
-                        state.current_board_id = None;
+
+            KanbanActions::CardLoaded(card) => {
+                // 卡片已加载
+                log!("CardLoaded: card_id='{}', title='{}'", card.id, card.title);
+                
+                // 添加卡片到 state
+                let space_id = card.space_id.clone();
+                state.upsert_card(card.clone());
+                
+                // 添加卡片 ID 到列表的 card_ids
+                if let Some(list) = state.lists.get_mut(&space_id) {
+                    if !list.card_ids.contains(&card.id) {
+                        list.card_ids.push(card.id);
                     }
                 }
+                
+                self.ui.redraw(cx);
             }
-            KanbanActions::LoadLists { .. } | KanbanActions::LoadCards { .. } => {}
-            KanbanActions::CreateList { board_id, name } => {
-                if let Some(board) = state.boards.get_mut(&board_id) {
-                    let list = KanbanList::new(&name, board_id.clone());
-                    board.list_ids.push(list.id.clone());
-                    state.lists.insert(list.id.clone(), list);
-                    board.updated_at = chrono::Utc::now().to_rfc3339();
-                }
-            }
-            KanbanActions::UpdateList {
-                board_id,
-                list_id,
-                updates,
-            } => {
-                if state.boards.contains_key(&board_id) {
-                    if let Some(list) = state.lists.get_mut(&list_id) {
-                        if let Some(name) = updates.name {
-                            list.name = name;
-                        }
-                        if let Some(archived) = updates.archived {
-                            list.is_archived = archived;
-                        }
-                        list.updated_at = chrono::Utc::now().to_rfc3339();
-                    }
-                }
-            }
-            KanbanActions::DeleteList { board_id, list_id } => {
-                if let Some(board) = state.boards.get_mut(&board_id) {
-                    board.list_ids.retain(|id| id != &list_id);
-                    if let Some(list) = state.lists.remove(&list_id) {
-                        for card_id in list.card_ids {
-                            state.cards.remove(&card_id);
-                        }
-                    }
-                    board.updated_at = chrono::Utc::now().to_rfc3339();
-                }
-            }
-            KanbanActions::MoveList {
-                board_id,
-                list_id,
-                new_position,
-            } => {
-                if let Some(list) = state.lists.get_mut(&list_id) {
-                    if list.board_id == board_id {
-                        list.position = new_position;
-                        list.updated_at = chrono::Utc::now().to_rfc3339();
-                    }
-                }
-            }
-            KanbanActions::CreateCard {
-                board_id,
-                list_id,
-                name,
-            } => {
-                // Submit async request to create card in Matrix
+
+            KanbanActions::CreateList { name } => {
+                // 创建新列表（Space）
                 if get_client().is_some() {
-                    submit_async_request(MatrixRequest::CreateKanbanCard {
-                        board_id: board_id.clone(),
-                        list_id: list_id.clone(),
-                        name: name.clone(),
-                    });
+                    submit_async_request(MatrixRequest::CreateKanbanList { name });
                     state.loading = true;
-                } else {
-                    // Fallback to local creation if no client
-                    if let Some(list) = state.lists.get_mut(&list_id) {
-                        if list.board_id == board_id {
-                            let card = KanbanCard::new(&name, list_id.clone(), board_id.clone());
-                            list.card_ids.push(card.id.clone());
-                            state.cards.insert(card.id.clone(), card);
-                            list.updated_at = chrono::Utc::now().to_rfc3339();
-                        }
-                    }
                 }
             }
-            KanbanActions::UpdateCard {
-                board_id,
-                card_id,
-                updates,
-            } => {
-                if let Some(card) = state.cards.get_mut(&card_id) {
-                    if card.board_id == board_id {
-                        if let Some(title) = updates.title {
-                            card.title = title;
-                        }
-                        if let Some(description) = updates.description {
-                            card.description = description;
-                        }
-                        if let Some(label_ids) = updates.label_ids {
-                            card.label_ids = label_ids;
-                        }
-                        if let Some(member_ids) = updates.member_ids {
-                            card.member_ids = member_ids;
-                        }
-                        if let Some(due_date) = updates.due_date {
-                            card.due_date = due_date;
-                        }
-                        if let Some(is_starred) = updates.is_starred {
-                            card.is_starred = is_starred;
-                        }
-                        if let Some(archived) = updates.archived {
-                            card.is_archived = archived;
-                        }
-                        card.updated_at = chrono::Utc::now().to_rfc3339();
-                    }
+
+            KanbanActions::CreateCard { space_id, title } => {
+                // 在列表中创建新卡片
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::CreateKanbanCard { space_id, title });
+                    state.loading = true;
                 }
             }
-            KanbanActions::DeleteCard { board_id, card_id } => {
-                if let Some(card) = state.cards.remove(&card_id) {
-                    if card.board_id == board_id {
-                        if let Some(list) = state.lists.get_mut(&card.list_id) {
-                            list.card_ids.retain(|id| id != &card_id);
-                            list.updated_at = chrono::Utc::now().to_rfc3339();
-                        }
-                    }
-                }
-            }
+
             KanbanActions::MoveCard {
-                board_id,
                 card_id,
-                from_list,
-                to_list,
-                new_position,
+                target_space_id,
+                position,
             } => {
+                // 移动卡片到不同列表
                 if let Some(card) = state.cards.get_mut(&card_id) {
-                    if card.board_id == board_id {
-                        card.list_id = to_list.clone();
-                        card.position = new_position;
-                        card.updated_at = chrono::Utc::now().to_rfc3339();
-                        if let Some(list) = state.lists.get_mut(&from_list) {
-                            list.card_ids.retain(|id| id != &card_id);
-                        }
-                        if let Some(list) = state.lists.get_mut(&to_list) {
-                            if !list.card_ids.contains(&card_id) {
-                                list.card_ids.push(card_id.clone());
-                            }
+                    let old_space_id = card.space_id.clone();
+                    card.space_id = target_space_id.clone();
+                    card.position = position;
+                    
+                    // 从旧列表移除
+                    if let Some(old_list) = state.lists.get_mut(&old_space_id) {
+                        old_list.card_ids.retain(|id| id != &card_id);
+                    }
+                    
+                    // 添加到新列表
+                    if let Some(new_list) = state.lists.get_mut(&target_space_id) {
+                        if !new_list.card_ids.contains(&card_id) {
+                            new_list.card_ids.push(card_id);
                         }
                     }
                 }
             }
-            KanbanActions::ArchiveCard {
-                board_id,
-                card_id,
-                archived,
-            } => {
+
+            KanbanActions::UpdateCardTitle { card_id, title } => {
+                // 更新卡片标题
                 if let Some(card) = state.cards.get_mut(&card_id) {
-                    if card.board_id == board_id {
-                        card.is_archived = archived;
+                    card.title = title;
+                }
+            }
+
+            KanbanActions::UpdateCardDescription {
+                card_id,
+                description,
+            } => {
+                // 更新卡片描述
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    card.description = description;
+                }
+            }
+
+            KanbanActions::DeleteCard { card_id } => {
+                // 删除卡片
+                if let Some(card) = state.cards.remove(&card_id) {
+                    // 从列表中移除卡片 ID
+                    if let Some(list) = state.lists.get_mut(&card.space_id) {
+                        list.card_ids.retain(|id| id != &card_id);
                     }
                 }
             }
-            KanbanActions::SetFilter(filter) => {
-                state.filter_state = Some(filter);
-            }
-            KanbanActions::SetSort(sort) => {
-                state.sort_state = Some(sort);
-            }
-            KanbanActions::Search { board_id, query } => {
-                if state.current_board_id.as_ref() == Some(&board_id) {
-                    state.filter_state = Some(KanbanFilterState {
-                        keyword: Some(query),
-                        label_ids: Vec::new(),
-                        member_ids: Vec::new(),
-                        due_date: None,
-                    });
-                }
-            }
-            KanbanActions::Error(message) => {
-                state.error = Some(message);
-            }
+
             KanbanActions::Loading(loading) => {
                 state.loading = loading;
             }
+
+            KanbanActions::Error(message) => {
+                state.error = Some(message);
+                state.loading = false;
+            }
         }
-    }
-
-    fn seed_board(
-        state: &mut KanbanAppState,
-        name: &str,
-        description: Option<String>,
-    ) -> KanbanBoard {
-        let board_id = Self::create_local_board_id();
-        let mut board = KanbanBoard::new(name);
-        board.id = board_id.clone();
-        board.description = description;
-
-        let mut todo = KanbanList::new("待办", board_id.clone());
-        let mut doing = KanbanList::new("进行中", board_id.clone());
-        let mut done = KanbanList::new("已完成", board_id.clone());
-
-        let triage = KanbanCard::new("整理需求", todo.id.clone(), board_id.clone());
-        let ux = KanbanCard::new("UI 结构草图", todo.id.clone(), board_id.clone());
-        todo.card_ids = vec![triage.id.clone(), ux.id.clone()];
-
-        let api = KanbanCard::new("接口联调", doing.id.clone(), board_id.clone());
-        let polish = KanbanCard::new("交互动效", doing.id.clone(), board_id.clone());
-        doing.card_ids = vec![api.id.clone(), polish.id.clone()];
-
-        let release = KanbanCard::new("提测上线", done.id.clone(), board_id.clone());
-        done.card_ids = vec![release.id.clone()];
-
-        board.list_ids = vec![todo.id.clone(), doing.id.clone(), done.id.clone()];
-        state.lists.insert(todo.id.clone(), todo);
-        state.lists.insert(doing.id.clone(), doing);
-        state.lists.insert(done.id.clone(), done);
-        state.cards.insert(triage.id.clone(), triage);
-        state.cards.insert(ux.id.clone(), ux);
-        state.cards.insert(api.id.clone(), api);
-        state.cards.insert(polish.id.clone(), polish);
-        state.cards.insert(release.id.clone(), release);
-        state.boards.insert(board_id, board.clone());
-        board
-    }
-
-    fn create_local_board_id() -> OwnedRoomId {
-        let room_id = format!("!kanban-{}:local", Uuid::new_v4());
-        OwnedRoomId::try_from(room_id)
-            .unwrap_or_else(|_| OwnedRoomId::try_from("!kanban:local").expect("fallback board id"))
     }
 }
 

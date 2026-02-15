@@ -536,22 +536,16 @@ pub enum MatrixRequest {
         destination: Arc<Mutex<crate::home::link_preview::TimestampedCacheEntry>>,
         update_sender: Option<crossbeam_channel::Sender<TimelineUpdate>>,
     },
-    /// Request to load all kanban boards from Matrix spaces.
-    LoadKanbanBoards,
-    /// Request to create a new kanban board (Matrix space).
-    CreateKanbanBoard {
+    /// Request to load all kanban lists (Matrix spaces with [kanban-list] topic).
+    LoadKanbanLists,
+    /// Request to create a new kanban list (Matrix space).
+    CreateKanbanList {
         name: String,
-        description: Option<String>,
     },
-    /// Request to load lists for a kanban board.
-    LoadKanbanLists {
-        board_id: OwnedRoomId,
-    },
-    /// Request to create a new kanban card (Matrix room).
+    /// Request to create a new kanban card (Matrix room in a space).
     CreateKanbanCard {
-        board_id: OwnedRoomId,
-        list_id: String,
-        name: String,
+        space_id: OwnedRoomId,
+        title: String,
     },
 }
 
@@ -1743,54 +1737,7 @@ async fn matrix_worker_task(
                 });
             }
 
-            MatrixRequest::LoadKanbanBoards => {
-                let Some(client) = get_client() else {
-                    error!("Cannot load kanban boards: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
-                    continue;
-                };
-
-                let _load_boards_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("Loading kanban boards from Matrix...");
-                    let adapter = MatrixKanbanAdapter::new(client);
-                    
-                    match adapter.get_all_boards().await {
-                        Ok(boards) => {
-                            log!("Successfully loaded {} kanban boards", boards.len());
-                            
-                            // 为每个看板加载列表
-                            for board in &boards {
-                                match adapter.load_lists(board).await {
-                                    Ok(lists) => {
-                                        log!("Loaded {} lists for board {}", lists.len(), board.name);
-                                        // 发送列表数据
-                                        for list in lists {
-                                            Cx::post_action(KanbanActions::ListLoaded(list));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to load lists for board {}: {}", board.name, e);
-                                    }
-                                }
-                            }
-                            
-                            // 发送看板数据
-                            Cx::post_action(KanbanActions::BoardsLoaded(boards));
-                            Cx::post_action(KanbanActions::Loading(false));
-                        }
-                        Err(e) => {
-                            error!("Failed to load kanban boards: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to load boards: {e}")));
-                            Cx::post_action(KanbanActions::Loading(false));
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-
-            MatrixRequest::LoadKanbanLists { board_id } => {
+            MatrixRequest::LoadKanbanLists => {
                 let Some(client) = get_client() else {
                     error!("Cannot load kanban lists: Matrix client not available");
                     Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
@@ -1800,36 +1747,23 @@ async fn matrix_worker_task(
                 let _load_lists_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("Loading lists for board: {}", board_id);
+                    log!("Loading kanban lists (Spaces) from Matrix...");
                     let adapter = MatrixKanbanAdapter::new(client);
                     
-                    // First get the board to pass to load_lists
-                    match adapter.get_all_boards().await {
-                        Ok(boards) => {
-                            if let Some(board) = boards.iter().find(|b| b.id == board_id) {
-                                match adapter.load_lists(board).await {
-                                    Ok(lists) => {
-                                        log!("Successfully loaded {} lists for board", lists.len());
-                                        for list in lists {
-                                            Cx::post_action(KanbanActions::ListLoaded(list));
-                                        }
-                                        Cx::post_action(KanbanActions::Loading(false));
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to load lists: {e:?}");
-                                        Cx::post_action(KanbanActions::Error(format!("Failed to load lists: {e}")));
-                                        Cx::post_action(KanbanActions::Loading(false));
-                                    }
-                                }
-                            } else {
-                                error!("Board not found: {}", board_id);
-                                Cx::post_action(KanbanActions::Error("Board not found".to_string()));
-                                Cx::post_action(KanbanActions::Loading(false));
+                    match adapter.get_all_kanban_spaces().await {
+                        Ok(spaces) => {
+                            log!("Successfully loaded {} kanban spaces", spaces.len());
+                            
+                            // 为每个 Space 发送 ListLoaded 事件
+                            for space in spaces {
+                                Cx::post_action(KanbanActions::ListLoaded(space));
                             }
+                            
+                            Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
-                            error!("Failed to get boards: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to get boards: {e}")));
+                            error!("Failed to load kanban lists: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to load lists: {e}")));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                     }
@@ -1837,45 +1771,47 @@ async fn matrix_worker_task(
                 });
             }
 
-            MatrixRequest::CreateKanbanBoard { name, description } => {
+            MatrixRequest::CreateKanbanList { name } => {
                 let Some(client) = get_client() else {
-                    error!("Cannot create kanban board: Matrix client not available");
+                    error!("Cannot create kanban list: Matrix client not available");
                     Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
                     continue;
                 };
 
-                let _create_board_task = Handle::current().spawn(async move {
+                let _create_list_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("Creating kanban board: {}", name);
+                    log!("Creating kanban list (Space): {}", name);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
                     
-                    match adapter.create_board(&name, description).await {
-                        Ok(board_id) => {
-                            log!("Successfully created kanban board: {}", board_id);
+                    match adapter.create_space(&name).await {
+                        Ok(space_id) => {
+                            log!("Successfully created kanban list: {}", space_id);
                             
                             // 等待一小段时间让Matrix SDK同步新创建的Space
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             
-                            // Reload all boards to get the new one
-                            match adapter.get_all_boards().await {
-                                Ok(boards) => {
-                                    log!("Reloaded {} boards after creation", boards.len());
-                                    for board in &boards {
-                                        log!("  - Board: {} ({})", board.name, board.id);
+                            // Reload all lists to get the new one
+                            match adapter.get_all_kanban_spaces().await {
+                                Ok(spaces) => {
+                                    log!("Reloaded {} lists after creation", spaces.len());
+                                    for space in &spaces {
+                                        log!("  - List: {} ({})", space.name, space.id);
                                     }
-                                    Cx::post_action(KanbanActions::BoardsLoaded(boards));
+                                    for space in spaces {
+                                        Cx::post_action(KanbanActions::ListLoaded(space));
+                                    }
                                 }
                                 Err(e) => {
-                                    error!("Failed to reload boards after creation: {e:?}");
+                                    error!("Failed to reload lists after creation: {e:?}");
                                 }
                             }
                             
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
-                            error!("Failed to create kanban board: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to create board: {e}")));
+                            error!("Failed to create kanban list: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to create list: {e}")));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                     }
@@ -1883,7 +1819,7 @@ async fn matrix_worker_task(
                 });
             }
 
-            MatrixRequest::CreateKanbanCard { board_id, list_id, name } => {
+            MatrixRequest::CreateKanbanCard { space_id, title } => {
                 let Some(client) = get_client() else {
                     error!("Cannot create kanban card: Matrix client not available");
                     Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
@@ -1893,24 +1829,24 @@ async fn matrix_worker_task(
                 let _create_card_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("Creating kanban card: {} in list {}", name, list_id);
+                    log!("Creating kanban card: {} in space {}", title, space_id);
                     let adapter = MatrixKanbanAdapter::new(client);
                     
-                    match adapter.create_card(&board_id, &list_id, &name).await {
+                    match adapter.create_card(&space_id, &title).await {
                         Ok(card_id) => {
                             log!("Successfully created kanban card: {}", card_id);
                             
                             // Wait for Matrix SDK to sync
-                            tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             
-                            // Reload the lists to get the updated card_ids
-                            if let Ok(boards) = adapter.get_all_boards().await {
-                                if let Some(board) = boards.iter().find(|b| b.id == board_id) {
-                                    if let Ok(lists) = adapter.load_lists(board).await {
-                                        for list in lists {
-                                            Cx::post_action(KanbanActions::ListLoaded(list));
-                                        }
-                                    }
+                            // Load the newly created card
+                            match adapter.load_card(&card_id, space_id.clone()).await {
+                                Ok(card) => {
+                                    log!("Loaded newly created card: {}", card.id);
+                                    Cx::post_action(KanbanActions::CardLoaded(card));
+                                }
+                                Err(e) => {
+                                    error!("Failed to load newly created card: {e:?}");
                                 }
                             }
                             

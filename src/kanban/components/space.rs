@@ -108,22 +108,20 @@ impl Widget for SpaceColumn {
                 if let Some(list_id) = &self.list_id {
                     log!("SpaceColumn: 在列表 {} 中创建新卡片", list_id);
                     
-                    // 从 scope 获取 AppState 和 board_id
-                    if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                        if let Some(board_id) = &app_state.kanban_state.current_board_id {
-                            // 触发创建卡片的 Action
-                            cx.widget_action(
-                                self.widget_uid(),
-                                &scope.path,
-                                crate::kanban::KanbanActions::CreateCard {
-                                    board_id: board_id.clone(),
-                                    list_id: list_id.clone(),
-                                    name: "新卡片".to_string(),
-                                }
-                            );
-                        } else {
-                            log!("SpaceColumn: 没有选中的看板");
-                        }
+                    // 简化架构：Space = List，直接使用 space_id
+                    // 从 scope.props 获取 space_id
+                    if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
+                        // 触发创建卡片的 Action
+                        cx.widget_action(
+                            self.widget_uid(),
+                            &scope.path,
+                            crate::kanban::KanbanActions::CreateCard {
+                                space_id: space_id.clone(),
+                                title: "新卡片".to_string(),
+                            }
+                        );
+                    } else {
+                        log!("SpaceColumn: 没有找到 space_id");
                     }
                     cx.redraw_all();
                 }
@@ -132,11 +130,12 @@ impl Widget for SpaceColumn {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 scope.props 获取 list_id
+        // 从 scope.props 获取 list_id 并保存
         if let Some(list_id) = scope.props.get::<String>() {
             self.list_id = Some(list_id.clone());
         }
         
+        // 直接使用 scope 绘制，这样 CardList 可以从 scope.props 获取 list_id
         self.view.draw_walk(cx, scope, walk)
     }
 }
@@ -155,30 +154,13 @@ impl Widget for SpaceList {
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
-                // 获取列表数据并克隆，避免借用冲突
+                // 简化架构：直接获取所有列表（Space）
                 let lists: Vec<_> = {
                     if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
                         let state = &app_state.kanban_state;
-                        let board_lists = state.current_board_lists();
-                        log!("SpaceList: Found {} lists in current board", board_lists.len());
-                        if let Some(board_id) = &state.current_board_id {
-                            log!("SpaceList: Current board ID: {}", board_id);
-                            if let Some(board) = state.boards.get(board_id) {
-                                log!("SpaceList: Board '{}' has {} list_ids:", board.name, board.list_ids.len());
-                                for list_id in &board.list_ids {
-                                    log!("  - board.list_ids contains: '{}'", list_id);
-                                }
-                            }
-                        } else {
-                            log!("SpaceList: No current board selected");
-                        }
-                        log!("SpaceList: Total boards: {}, Total lists in state.lists: {}", 
-                            state.boards.len(), state.lists.len());
-                        log!("SpaceList: Keys in state.lists HashMap:");
-                        for key in state.lists.keys() {
-                            log!("  - state.lists key: '{}'", key);
-                        }
-                        board_lists.into_iter().map(|l| l.clone()).collect()
+                        let all_lists = state.all_lists();
+                        log!("SpaceList: Found {} lists (Spaces)", all_lists.len());
+                        all_lists.into_iter().map(|l| l.clone()).collect()
                     } else {
                         // 如果没有 AppState，返回空列表
                         log!("SpaceList: No AppState in scope!");
@@ -227,9 +209,8 @@ impl Widget for SpaceList {
 
                     // 传递 list_id 给 SpaceColumn
                     let list_id = kanban_list.id.clone();
-                    if let Some(app_state_mut) = scope.data.get_mut::<crate::app::AppState>() {
-                        let kanban_state = &mut app_state_mut.kanban_state;
-                        let mut space_scope = Scope::with_data_props(kanban_state, &list_id);
+                    if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
+                        let mut space_scope = Scope::with_data_props(app_state, &list_id);
                         space_item.draw_all(cx, &mut space_scope);
                     }
                 }
