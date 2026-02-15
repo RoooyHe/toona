@@ -72,7 +72,12 @@ impl Widget for BoardCard {
                 log!("BoardCard: Clicked on board {}", board_id_str);
                 // 解析 board_id 字符串为 OwnedRoomId
                 if let Ok(board_id) = board_id_str.parse() {
-                    cx.action(KanbanActions::SelectBoard(board_id));
+                    log!("BoardCard: Sending SelectBoard action");
+                    cx.widget_action(
+                        self.widget_uid(),
+                        &scope.path,
+                        KanbanActions::SelectBoard(board_id)
+                    );
                 }
             }
         }

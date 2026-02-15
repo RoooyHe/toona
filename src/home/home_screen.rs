@@ -501,11 +501,11 @@ impl Widget for HomeScreen {
                 self.view.redraw(cx);
             }
             
-            // 处理SelectBoard action
+            // 处理SelectBoard action - 传递给 app.rs 处理
             for action in actions {
                 if let Some(kanban_action) = action.downcast_ref::<KanbanActions>() {
                     if let KanbanActions::SelectBoard(board_id) = kanban_action {
-                        log!("Selected board: {}", board_id);
+                        log!("HomeScreen: Received SelectBoard action for board: {}", board_id);
                         // 切换到看板详情页面
                         let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(PageFlip));
                         kanban_page_flip.set_active_page(cx, id!(board_detail_page));
@@ -518,6 +518,7 @@ impl Widget for HomeScreen {
                         }
                         
                         self.view.redraw(cx);
+                        // 不要 break，让 action 继续传递到 app.rs
                     }
                 }
             }

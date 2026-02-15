@@ -288,7 +288,7 @@ impl MatrixKanbanAdapter {
         let board_id = room.room_id().to_owned();
         
         // 创建后立即设置topic（包含[kanban]标记）
-        let topic_with_marker = if let Some(desc) = description {
+        let topic_with_marker = if let Some(ref desc) = description {
             format!("[kanban] {}", desc)
         } else {
             "[kanban]".to_string()
@@ -301,7 +301,47 @@ impl MatrixKanbanAdapter {
         room.send_state_event(topic_content).await
             .context("Failed to set board topic")?;
 
-        log!("Created kanban board space: {} ({})", name, board_id);
+        // 创建默认列表
+        let default_lists = vec![
+            ListDefinition {
+                id: "todo".to_string(),
+                name: "待办".to_string(),
+                position: 1000.0,
+            },
+            ListDefinition {
+                id: "in_progress".to_string(),
+                name: "进行中".to_string(),
+                position: 2000.0,
+            },
+            ListDefinition {
+                id: "done".to_string(),
+                name: "已完成".to_string(),
+                position: 3000.0,
+            },
+        ];
+
+        // 保存看板元数据（包含列表定义）
+        let board_metadata = KanbanBoardMetadata {
+            name: name.to_string(),
+            description: description.clone(),
+            lists: default_lists,
+            background_color: "#0079BF".to_string(),
+            labels: Vec::new(),
+            is_archived: false,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        let metadata_json = serde_json::value::to_raw_value(&board_metadata)
+            .context("Failed to serialize board metadata")?;
+        
+        room.send_state_event_raw(
+            KANBAN_BOARD_EVENT_TYPE,
+            "",
+            metadata_json,
+        ).await.context("Failed to save board metadata")?;
+
+        log!("Created kanban board space: {} ({}) with {} default lists", name, board_id, board_metadata.lists.len());
         Ok(board_id)
     }
 
@@ -343,20 +383,17 @@ impl MatrixKanbanAdapter {
         // Get the room_id from the Room object
         let card_room_id = room.room_id().to_owned();
 
-        // TODO: 创建后立即添加卡片元数据
-        // 需要正确的 send_state_event_raw API
-        /*
-        if let Some(room) = self.client.get_room(&card_room_id) {
-            let metadata_raw = serde_json::value::to_raw_value(&metadata)
+        // 保存卡片元数据到 Room 的 state event
+        if let Some(card_room) = self.client.get_room(&card_room_id) {
+            let metadata_json = serde_json::value::to_raw_value(&_metadata)
                 .context("Failed to serialize card metadata")?;
             
-            let _ = room.send_state_event_raw(
-                KANBAN_CARD_EVENT_TYPE.to_string(),
-                "".to_string(),
-                Raw::from_json(metadata_raw),
+            let _ = card_room.send_state_event_raw(
+                KANBAN_CARD_EVENT_TYPE,
+                "",
+                metadata_json,
             ).await;
         }
-        */
 
         // 将卡片 Room 添加到看板 Space
         self.add_card_to_board(board_id, &card_room_id).await?;
@@ -367,24 +404,22 @@ impl MatrixKanbanAdapter {
 
     /// 将卡片添加到看板（设置 Space 子关系）
     async fn add_card_to_board(&self, board_id: &RoomId, card_room_id: &RoomId) -> Result<()> {
-        let _space = self.client
+        let space = self.client
             .get_room(board_id)
             .context("Board space not found")?;
 
-        // TODO: 创建 m.space.child 事件内容并发送
-        // 需要正确的 send_state_event_raw API
-        /*
+        // 创建 m.space.child 事件
         use matrix_sdk::ruma::events::space::child::SpaceChildEventContent;
+        
         let child_content = SpaceChildEventContent::new(vec![]);
-        let content_raw = serde_json::value::to_raw_value(&child_content)
-            .context("Failed to serialize space child content")?;
-
+        
+        // 使用 state_key 为 card_room_id 发送 m.space.child 事件
         space.send_state_event_raw(
-            "m.space.child".to_string(),
-            card_room_id.as_str().to_string(),
-            Raw::from_json(content_raw),
+            "m.space.child",
+            card_room_id.as_str(),
+            serde_json::value::to_raw_value(&child_content)
+                .context("Failed to serialize space child content")?,
         ).await.context("Failed to add card to board space")?;
-        */
 
         log!("Added card {} to board {}", card_room_id, board_id);
         Ok(())

@@ -12,6 +12,9 @@ pub enum KanbanActions {
     
     /// 列表已加载
     ListLoaded(KanbanList),
+    
+    /// 卡片已加载
+    CardLoaded(KanbanCard),
 
     /// 选择看板
     SelectBoard(OwnedRoomId),

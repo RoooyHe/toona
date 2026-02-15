@@ -249,9 +249,10 @@ impl MatchEvent for App {
         let _app_data_dir = crate::app_data_dir();
         log!("App::handle_startup(): app_data_dir: {:?}", _app_data_dir);
 
-        if let Err(e) = persistence::load_window_state(self.ui.window(ids!(main_window)), cx) {
-            error!("Failed to load window state: {}", e);
-        }
+        // 注释掉窗口状态恢复功能 - 每次启动使用默认窗口尺寸和位置
+        // if let Err(e) = persistence::load_window_state(self.ui.window(ids!(main_window)), cx) {
+        //     error!("Failed to load window state: {}", e);
+        // }
 
         self.update_login_visibility(cx);
 
@@ -557,10 +558,11 @@ fn clear_all_app_state(cx: &mut Cx) {
 impl AppMain for App {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event) {
         if let Event::Shutdown = event {
-            let window_ref = self.ui.window(ids!(main_window));
-            if let Err(e) = persistence::save_window_state(window_ref, cx) {
-                error!("Failed to save window state. Error: {e}");
-            }
+            // 注释掉窗口状态保存功能 - 不记录窗口尺寸和位置
+            // let window_ref = self.ui.window(ids!(main_window));
+            // if let Err(e) = persistence::save_window_state(window_ref, cx) {
+            //     error!("Failed to save window state. Error: {e}");
+            // }
             if let Some(user_id) = current_user_id() {
                 let app_state = self.app_state.clone();
                 if let Err(e) = persistence::save_app_state(app_state, user_id) {
