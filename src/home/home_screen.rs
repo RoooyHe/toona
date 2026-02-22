@@ -24,6 +24,7 @@ live_design! {
     use crate::settings::settings_screen::SettingsScreen;
     use crate::kanban::components::boards_list::BoardsList;
     use crate::kanban::components::space::SpaceList;
+    use crate::kanban::components::card_detail_view::CardDetailView;
 
 
     StackNavigationWrapper = {{StackNavigationWrapper}} {
@@ -152,15 +153,15 @@ live_design! {
                                     }
                                 }
 
-                                // 看板列表区域 - 显示所有看板
+                                // 看板区域 - 直接显示所有列表和卡片
                                 <ScrollXYView> {
                                     width: Fill, height: Fill
                                     scroll_bars: <ScrollBars> {
-                                        show_scroll_x: false,
+                                        show_scroll_x: true,
                                         show_scroll_y: true,
                                     }
 
-                                    <BoardsList> {}
+                                    <SpaceList> {}
                                 }
                             }
 
@@ -478,11 +479,20 @@ impl Widget for HomeScreen {
         
         // 然后处理创建看板按钮点击
         if let Event::Actions(actions) = event {
-            log!("HomeScreen: Received {} actions", actions.len());
             
-            // 尝试通过完整路径访问按钮
+            // 处理 CardDetailView 的关闭 Action
+            if let Some(crate::kanban::components::card_detail_view::CardDetailViewAction::Close) = 
+                actions.find_widget_action(self.view.widget_uid()).cast() 
+            {
+                log!("HomeScreen: Closing card detail view");
+                // TODO: 关闭卡片详情模态框
+                // self.view.modal(ids!(card_detail_modal)).close(cx);
+            }
+            
+            // 访问看板页面中的创建按钮
             let page_flip = self.view.page_flip(ids!(home_screen_page_flip));
-            let button_ref = page_flip.button(ids!(create_board_button));
+            let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(kanban_page_flip));
+            let button_ref = kanban_page_flip.button(ids!(create_board_button));
             
             if button_ref.clicked(actions) {
                 log!("Creating new kanban list...");

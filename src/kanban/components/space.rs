@@ -82,60 +82,55 @@ pub struct SpaceColumn {
 
 impl Widget for SpaceColumn {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
+        
         self.view.handle_event(cx, event, scope);
         
         // 处理列表标题输入框事件
         if let Event::Actions(actions) = event {
-            // 处理标题输入框文本变化
-            if let Some(text) = self.view.text_input(ids!(space_title_input)).changed(actions) {
-                if let Some(list_id) = &self.list_id {
-                    println!("SpaceColumn: 列表标题输入变化: '{}' (列表ID: {})", text, list_id);
+            // 只在按钮被点击时才输出日志
+            if self.view.button(ids!(create_button)).clicked(actions) {
+                log!("🎯🎯🎯 SpaceColumn: 创建卡片按钮被点击!!!");
+                
+                // 简化架构：Space = List，直接使用 space_id
+                // 从 scope.props 获取 space_id
+                if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
+                    log!("🎯 SpaceColumn: 在列表 {} 中创建新卡片", space_id);
+                    // 使用 cx.action() 而不是 cx.widget_action() 以便 action 能传递到 app.rs
+                    cx.action(crate::kanban::KanbanActions::CreateCard {
+                        space_id: space_id.clone(),
+                        title: "新卡片".to_string(),
+                    });
+                    log!("🎯 SpaceColumn: CreateCard action sent!");
+                } else {
+                    log!("❌ SpaceColumn: 没有找到 space_id in scope.props");
                 }
+                cx.redraw_all();
+            }
+            
+            // 处理标题输入框文本变化（静默处理，不输出日志）
+            if let Some(_text) = self.view.text_input(ids!(space_title_input)).changed(actions) {
+                // 静默处理
             }
             
             // 处理标题输入框回车
             if let Some((text, _)) = self.view.text_input(ids!(space_title_input)).returned(actions) {
                 if let Some(list_id) = &self.list_id {
                     if !text.trim().is_empty() {
-                        println!("SpaceColumn: 回车更新列表标题: '{}' (列表ID: {})", text.trim(), list_id);
+                        log!("SpaceColumn: 回车更新列表标题: '{}' (列表ID: {})", text.trim(), list_id);
                         // TODO: 触发更新列表标题的 Action
                     }
-                }
-            }
-            
-            // 处理创建卡片按钮点击
-            if self.view.button(ids!(create_button)).clicked(actions) {
-                if let Some(list_id) = &self.list_id {
-                    log!("SpaceColumn: 在列表 {} 中创建新卡片", list_id);
-                    
-                    // 简化架构：Space = List，直接使用 space_id
-                    // 从 scope.props 获取 space_id
-                    if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
-                        // 触发创建卡片的 Action
-                        cx.widget_action(
-                            self.widget_uid(),
-                            &scope.path,
-                            crate::kanban::KanbanActions::CreateCard {
-                                space_id: space_id.clone(),
-                                title: "新卡片".to_string(),
-                            }
-                        );
-                    } else {
-                        log!("SpaceColumn: 没有找到 space_id");
-                    }
-                    cx.redraw_all();
                 }
             }
         }
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 scope.props 获取 list_id 并保存
-        if let Some(list_id) = scope.props.get::<String>() {
-            self.list_id = Some(list_id.clone());
+        // 从 scope.props 获取 space_id (OwnedRoomId) 并保存为字符串
+        if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
+            self.list_id = Some(space_id.to_string());
         }
         
-        // 直接使用 scope 绘制，这样 CardList 可以从 scope.props 获取 list_id
+        // 直接使用 scope 绘制，这样 CardList 可以从 scope.props 获取 space_id
         self.view.draw_walk(cx, scope, walk)
     }
 }
@@ -148,7 +143,31 @@ pub struct SpaceList {
 
 impl Widget for SpaceList {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
+        // 先让 view 处理事件（这会传递给 PortalList 和其子项）
         self.view.handle_event(cx, event, scope);
+        
+        // 然后显式地让每个 space_item 处理事件
+        if let Some(mut list) = self.view.portal_list(ids!(spaces)).borrow_mut() {
+            let lists: Vec<_> = {
+                if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                    let state = &app_state.kanban_state;
+                    state.all_lists().into_iter().map(|l| l.clone()).collect()
+                } else {
+                    Vec::new()
+                }
+            };
+            
+            for list_idx in 0..lists.len() {
+                let space_item = list.item(cx, list_idx, live_id!(Space));
+                let kanban_list = &lists[list_idx];
+                let list_id = kanban_list.id.clone();
+                
+                if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
+                    let mut space_scope = Scope::with_data_props(app_state, &list_id);
+                    space_item.handle_event(cx, event, &mut space_scope);
+                }
+            }
+        }
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
@@ -158,17 +177,12 @@ impl Widget for SpaceList {
                 let lists: Vec<_> = {
                     if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
                         let state = &app_state.kanban_state;
-                        let all_lists = state.all_lists();
-                        log!("SpaceList: Found {} lists (Spaces)", all_lists.len());
-                        all_lists.into_iter().map(|l| l.clone()).collect()
+                        state.all_lists().into_iter().map(|l| l.clone()).collect()
                     } else {
-                        // 如果没有 AppState，返回空列表
-                        log!("SpaceList: No AppState in scope!");
                         Vec::new()
                     }
                 };
                 
-                log!("SpaceList: Setting item range to {}", lists.len());
                 list.set_item_range(cx, 0, lists.len());
 
                 while let Some(list_idx) = list.next_visible_item(cx) {

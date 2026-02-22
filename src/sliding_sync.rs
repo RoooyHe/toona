@@ -1755,8 +1755,22 @@ async fn matrix_worker_task(
                             log!("Successfully loaded {} kanban spaces", spaces.len());
                             
                             // 为每个 Space 发送 ListLoaded 事件
-                            for space in spaces {
-                                Cx::post_action(KanbanActions::ListLoaded(space));
+                            for space in &spaces {
+                                Cx::post_action(KanbanActions::ListLoaded(space.clone()));
+                                
+                                // 加载这个 Space 中的所有卡片
+                                log!("Loading {} cards for space {}", space.card_ids.len(), space.id);
+                                for card_id in &space.card_ids {
+                                    match adapter.load_card(card_id, space.id.clone()).await {
+                                        Ok(card) => {
+                                            log!("Loaded card: {} ({})", card.title, card.id);
+                                            Cx::post_action(KanbanActions::CardLoaded(card));
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to load card {}: {e:?}", card_id);
+                                        }
+                                    }
+                                }
                             }
                             
                             Cx::post_action(KanbanActions::Loading(false));
@@ -1788,25 +1802,20 @@ async fn matrix_worker_task(
                         Ok(space_id) => {
                             log!("Successfully created kanban list: {}", space_id);
                             
-                            // 等待一小段时间让Matrix SDK同步新创建的Space
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                            // 等待Matrix SDK同步新创建的Space
+                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                             
-                            // Reload all lists to get the new one
-                            match adapter.get_all_kanban_spaces().await {
-                                Ok(spaces) => {
-                                    log!("Reloaded {} lists after creation", spaces.len());
-                                    for space in &spaces {
-                                        log!("  - List: {} ({})", space.name, space.id);
-                                    }
-                                    for space in spaces {
-                                        Cx::post_action(KanbanActions::ListLoaded(space));
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to reload lists after creation: {e:?}");
-                                }
-                            }
+                            // 只加载新创建的Space，不要重新加载所有Space
+                            // 创建一个新的KanbanList对象
+                            let new_list = crate::kanban::state::kanban_state::KanbanList {
+                                id: space_id.clone(),
+                                name: name.clone(),
+                                card_ids: Vec::new(), // 新创建的Space没有卡片
+                                position: 1000.0,
+                            };
                             
+                            log!("Sending ListLoaded for newly created space: {} ({})", name, space_id);
+                            Cx::post_action(KanbanActions::ListLoaded(new_list));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
@@ -1820,46 +1829,75 @@ async fn matrix_worker_task(
             }
 
             MatrixRequest::CreateKanbanCard { space_id, title } => {
+                log!("🚀🚀🚀 MatrixRequest::CreateKanbanCard received! space_id={}, title={}", space_id, title);
+                
                 let Some(client) = get_client() else {
-                    error!("Cannot create kanban card: Matrix client not available");
+                    error!("❌ Cannot create kanban card: Matrix client not available");
                     Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
                     continue;
                 };
 
+                log!("🚀 Client available, spawning create_card_task...");
+                
                 let _create_card_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("Creating kanban card: {} in space {}", title, space_id);
-                    let adapter = MatrixKanbanAdapter::new(client);
+                    log!("🚀 Task started: Creating kanban card: {} in space {}", title, space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
                     
                     match adapter.create_card(&space_id, &title).await {
                         Ok(card_id) => {
-                            log!("Successfully created kanban card: {}", card_id);
+                            log!("✅ Successfully created kanban card: {}", card_id);
                             
-                            // Wait for Matrix SDK to sync
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                            // Wait longer for Matrix SDK to sync the new card
+                            log!("⏳ Waiting for Matrix SDK to sync the new card...");
+                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                             
-                            // Load the newly created card
-                            match adapter.load_card(&card_id, space_id.clone()).await {
-                                Ok(card) => {
-                                    log!("Loaded newly created card: {}", card.id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("Failed to load newly created card: {e:?}");
+                            // Try to load the newly created card with retries
+                            let mut retries = 3;
+                            let mut card_loaded = false;
+                            
+                            while retries > 0 && !card_loaded {
+                                match adapter.load_card(&card_id, space_id.clone()).await {
+                                    Ok(card) => {
+                                        log!("✅ Loaded newly created card: {} (title: {})", card.id, card.title);
+                                        Cx::post_action(KanbanActions::CardLoaded(card));
+                                        card_loaded = true;
+                                    }
+                                    Err(e) => {
+                                        retries -= 1;
+                                        if retries > 0 {
+                                            error!("❌ Failed to load newly created card (retries left: {}): {e:?}", retries);
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                                        } else {
+                                            error!("❌ Failed to load newly created card after all retries: {e:?}");
+                                            // Create a temporary card object as fallback
+                                            log!("🔧 Creating temporary card object for {}", card_id);
+                                            let temp_card = crate::kanban::state::kanban_state::KanbanCard {
+                                                id: card_id.clone(),
+                                                title: title.clone(),
+                                                description: None,
+                                                space_id: space_id.clone(),
+                                                position: 1000.0,
+                                            };
+                                            Cx::post_action(KanbanActions::CardLoaded(temp_card));
+                                        }
+                                    }
                                 }
                             }
                             
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
-                            error!("Failed to create kanban card: {e:?}");
+                            error!("❌ Failed to create kanban card: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to create card: {e}")));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
+                
+                log!("🚀 Task spawned successfully");
             }
         }
     }

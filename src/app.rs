@@ -772,10 +772,29 @@ impl App {
 
             KanbanActions::CreateCard { space_id, title } => {
                 // 在列表中创建新卡片
+                log!("🎯 Received CreateCard action: space_id='{}', title='{}'", space_id, title);
                 if get_client().is_some() {
+                    log!("🎯 Submitting CreateKanbanCard request to worker thread...");
                     submit_async_request(MatrixRequest::CreateKanbanCard { space_id, title });
                     state.loading = true;
+                    log!("🎯 Request submitted, loading=true");
+                } else {
+                    log!("❌ Cannot create card: Matrix client not available");
                 }
+            }
+
+            KanbanActions::ShowCardDetail { card_id } => {
+                // 显示卡片详情
+                log!("ShowCardDetail: card_id='{}'", card_id);
+                
+                // 存储当前要显示的卡片 ID
+                self.app_state.kanban_state.selected_card_id = Some(card_id);
+                
+                // TODO: 打开卡片详情模态框
+                // self.ui.modal(ids!(card_detail_modal)).open(cx);
+                
+                // 暂时只记录日志和更新状态
+                self.ui.redraw(cx);
             }
 
             KanbanActions::MoveCard {
@@ -800,14 +819,19 @@ impl App {
                             new_list.card_ids.push(card_id);
                         }
                     }
+                    
+                    self.ui.redraw(cx);
                 }
             }
 
             KanbanActions::UpdateCardTitle { card_id, title } => {
                 // 更新卡片标题
+                log!("UpdateCardTitle: card_id='{}', title='{}'", card_id, title);
                 if let Some(card) = state.cards.get_mut(&card_id) {
-                    card.title = title;
+                    card.title = title.clone();
+                    self.ui.redraw(cx);
                 }
+                // TODO: 同步到 Matrix 服务器
             }
 
             KanbanActions::UpdateCardDescription {
@@ -815,19 +839,25 @@ impl App {
                 description,
             } => {
                 // 更新卡片描述
+                log!("UpdateCardDescription: card_id='{}', description='{:?}'", card_id, description);
                 if let Some(card) = state.cards.get_mut(&card_id) {
-                    card.description = description;
+                    card.description = description.clone();
+                    self.ui.redraw(cx);
                 }
+                // TODO: 同步到 Matrix 服务器
             }
 
             KanbanActions::DeleteCard { card_id } => {
                 // 删除卡片
+                log!("DeleteCard: card_id='{}'", card_id);
                 if let Some(card) = state.cards.remove(&card_id) {
                     // 从列表中移除卡片 ID
                     if let Some(list) = state.lists.get_mut(&card.space_id) {
                         list.card_ids.retain(|id| id != &card_id);
                     }
+                    self.ui.redraw(cx);
                 }
+                // TODO: 同步到 Matrix 服务器（删除 Room）
             }
 
             KanbanActions::Loading(loading) => {

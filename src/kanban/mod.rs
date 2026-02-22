@@ -10,6 +10,7 @@ pub mod drag_drop;
 pub mod matrix_adapter;
 pub mod models;
 pub mod components;
+pub mod local_cache;
 
 // Re-export main types for convenience
 // 使用简化的数据模型

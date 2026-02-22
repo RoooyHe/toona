@@ -113,8 +113,6 @@ impl Widget for CardList {
         } else {
             Vec::new()
         };
-        
-        log!("CardList: space_id='{}', found {} cards", space_id, cards.len());
 
         // 隐藏新卡片输入框（暂时不实现）
         self.view.view(ids!(new_card_input)).apply_over(cx, live! { visible: false });
@@ -136,15 +134,24 @@ impl Widget for CardList {
                         .text_input(ids!(card_title_input))
                         .set_text(cx, &card.title);
 
-                    // 设置标签信息（暂时显示为空）
+                    // 设置标签信息（显示描述或"无描述"）
+                    let tags_text = if let Some(desc) = &card.description {
+                        if desc.is_empty() {
+                            "描述: 无".to_string()
+                        } else {
+                            format!("描述: {}", desc)
+                        }
+                    } else {
+                        "描述: 无".to_string()
+                    };
                     card_item
                         .label(ids!(card_tags))
-                        .set_text(cx, "标签: 无");
+                        .set_text(cx, &tags_text);
 
-                    // 传递 card_id 给 CardItem
+                    // 传递 card_id (OwnedRoomId) 给 CardItem
                     let card_id = card.id.clone();
                     if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
-                        let mut card_scope = Scope::with_data_props(&mut app_state.kanban_state, &card_id);
+                        let mut card_scope = Scope::with_data_props(app_state, &card_id);
                         card_item.draw_all(cx, &mut card_scope);
                     }
                 }

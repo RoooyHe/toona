@@ -24,6 +24,11 @@ pub enum KanbanActions {
         title: String,
     },
     
+    /// 显示卡片详情
+    ShowCardDetail {
+        card_id: OwnedRoomId,
+    },
+    
     /// 移动卡片到不同列表
     MoveCard {
         card_id: OwnedRoomId,

@@ -45,6 +45,9 @@ pub struct KanbanAppState {
     /// 卡片数据缓存（Room ID -> KanbanCard）
     pub cards: HashMap<OwnedRoomId, KanbanCard>,
 
+    /// 当前选中的卡片 ID（用于显示详情）
+    pub selected_card_id: Option<OwnedRoomId>,
+
     /// 加载状态
     pub loading: bool,
 
