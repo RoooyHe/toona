@@ -53,6 +53,74 @@ pub enum KanbanActions {
         card_id: OwnedRoomId,
     },
     
+    // ========== Phase 2: TodoList Actions ==========
+    
+    /// 添加待办事项
+    AddTodo {
+        card_id: OwnedRoomId,
+        text: String,
+    },
+    
+    /// 切换待办事项完成状态
+    ToggleTodo {
+        card_id: OwnedRoomId,
+        todo_id: String,
+    },
+    
+    /// 更新待办事项文本
+    UpdateTodoText {
+        card_id: OwnedRoomId,
+        todo_id: String,
+        text: String,
+    },
+    
+    /// 删除待办事项
+    DeleteTodo {
+        card_id: OwnedRoomId,
+        todo_id: String,
+    },
+    
+    // ========== Phase 3: Tags Actions ==========
+    
+    /// 添加标签
+    AddTag {
+        card_id: OwnedRoomId,
+        tag: String,
+    },
+    
+    /// 删除标签
+    RemoveTag {
+        card_id: OwnedRoomId,
+        tag: String,
+    },
+    
+    // ========== Phase 4: EndTime Actions ==========
+    
+    /// 设置截止时间
+    SetEndTime {
+        card_id: OwnedRoomId,
+        end_time: u64,  // Unix timestamp in seconds
+    },
+    
+    /// 清除截止时间
+    ClearEndTime {
+        card_id: OwnedRoomId,
+    },
+    
+    // ========== Phase 5: Activities Actions ==========
+    
+    /// 添加评论
+    AddComment {
+        card_id: OwnedRoomId,
+        text: String,
+    },
+    
+    /// 活动记录已加载
+    ActivitiesLoaded {
+        card_id: OwnedRoomId,
+        activities: Vec<crate::kanban::state::kanban_state::CardActivity>,
+    },
+    
     /// 设置加载状态
     Loading(bool),
     

@@ -62,6 +62,7 @@ live_design! {
     use crate::shared::callout_tooltip::CalloutTooltip;
     use crate::shared::image_viewer::ImageViewer;
     use link::tsp_link::TspVerificationModal;
+    use crate::kanban::components::card_modal::CardDetailModal;
 
 
     App = {{App}} {
@@ -149,6 +150,9 @@ live_design! {
                                 logout_confirm_modal_inner = <LogoutConfirmModal> {}
                             }
                         }
+
+                        // Show the card detail modal for kanban cards
+                        card_detail_modal = <CardDetailModal> {}
 
                         // Show incoming verification requests in front of the aforementioned UI elements.
                         verification_modal = <Modal> {
@@ -530,6 +534,12 @@ impl MatchEvent for App {
                 continue;
             }
 
+            // Handle card detail modal close button
+            if self.ui.button(ids!(card_detail_modal.content.modal_header.close_button)).clicked(actions) {
+                self.ui.modal(ids!(card_detail_modal)).close(cx);
+                continue;
+            }
+
             // // message source modal handling.
             // match action.as_widget_action().cast() {
             //     MessageAction::MessageSourceModalOpen { room_id: _, event_id: _, original_json: _ } => {
@@ -788,12 +798,19 @@ impl App {
                 log!("ShowCardDetail: card_id='{}'", card_id);
                 
                 // 存储当前要显示的卡片 ID
-                self.app_state.kanban_state.selected_card_id = Some(card_id);
+                self.app_state.kanban_state.selected_card_id = Some(card_id.clone());
                 
-                // TODO: 打开卡片详情模态框
-                // self.ui.modal(ids!(card_detail_modal)).open(cx);
+                // 加载活动记录
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::LoadCardActivities {
+                        card_id,
+                        limit: Some(50),
+                    });
+                }
                 
-                // 暂时只记录日志和更新状态
+                // 打开卡片详情模态框
+                self.ui.modal(ids!(card_detail_modal)).open(cx);
+                
                 self.ui.redraw(cx);
             }
 
@@ -858,6 +875,82 @@ impl App {
                     self.ui.redraw(cx);
                 }
                 // TODO: 同步到 Matrix 服务器（删除 Room）
+            }
+            
+            // ========== Phase 2: TodoList Action Handlers ==========
+            
+            KanbanActions::AddTodo { card_id, text } => {
+                log!("📝 AddTodo: card_id='{}', text='{}'", card_id, text);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::AddCardTodo { card_id, text });
+                }
+            }
+            
+            KanbanActions::ToggleTodo { card_id, todo_id } => {
+                log!("✅ ToggleTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::ToggleCardTodo { card_id, todo_id });
+                }
+            }
+            
+            KanbanActions::UpdateTodoText { card_id, todo_id, text } => {
+                log!("✏️ UpdateTodoText: card_id='{}', todo_id='{}', text='{}'", card_id, todo_id, text);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::UpdateCardTodoText { card_id, todo_id, text });
+                }
+            }
+            
+            KanbanActions::DeleteTodo { card_id, todo_id } => {
+                log!("🗑️ DeleteTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::DeleteCardTodo { card_id, todo_id });
+                }
+            }
+            
+            // ========== Phase 3: Tags Action Handlers ==========
+            
+            KanbanActions::AddTag { card_id, tag } => {
+                log!("🏷️ AddTag: card_id='{}', tag='{}'", card_id, tag);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::AddCardTag { card_id, tag });
+                }
+            }
+            
+            KanbanActions::RemoveTag { card_id, tag } => {
+                log!("🗑️ RemoveTag: card_id='{}', tag='{}'", card_id, tag);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::RemoveCardTag { card_id, tag });
+                }
+            }
+            
+            // ========== Phase 4: EndTime Action Handlers ==========
+            
+            KanbanActions::SetEndTime { card_id, end_time } => {
+                log!("⏰ SetEndTime: card_id='{}', end_time={}", card_id, end_time);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::SetCardEndTime { card_id, end_time });
+                }
+            }
+            
+            KanbanActions::ClearEndTime { card_id } => {
+                log!("🗑️ ClearEndTime: card_id='{}'", card_id);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::ClearCardEndTime { card_id });
+                }
+            }
+            
+            // ========== Phase 5: Activities Action Handlers ==========
+            
+            KanbanActions::AddComment { card_id, text } => {
+                log!("💬 AddComment: card_id='{}', text='{}'", card_id, text);
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::AddCardComment { card_id, text });
+                }
+            }
+            
+            KanbanActions::ActivitiesLoaded { card_id, activities } => {
+                log!("📖 ActivitiesLoaded: card_id='{}', count={}", card_id, activities.len());
+                state.activities.insert(card_id, activities);
             }
 
             KanbanActions::Loading(loading) => {

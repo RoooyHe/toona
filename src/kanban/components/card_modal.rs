@@ -7,6 +7,7 @@ live_design! {
     use crate::kanban::components::card_info_section::CardInfoSection;
     use crate::kanban::components::tag_section::TagSection;
     use crate::kanban::components::todo_section::TodoSection;
+    use crate::kanban::components::endtime_section::EndTimeSection;
     use crate::kanban::components::active_section::ActiveSection;
 
     // 卡片详情模态框 - 左右分栏布局
@@ -22,7 +23,7 @@ live_design! {
             }
 
             // 标题栏
-            <ModalHeader> {}
+            modal_header = <ModalHeader> {}
 
             // 主内容区域 - 左右分栏
             <View> {
@@ -50,6 +51,9 @@ live_design! {
 
                         // 标签管理
                         <TagSection> {}
+                        
+                        // 截止时间
+                        <EndTimeSection> {}
 
                         // 待办事项管理
                         <TodoSection> {}

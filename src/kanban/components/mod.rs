@@ -12,6 +12,7 @@ pub mod modal_header;
 pub mod card_info_section;
 pub mod tag_section;
 pub mod todo_section;
+pub mod endtime_section;
 pub mod active_section;
 
 pub use space::*;
@@ -32,6 +33,7 @@ pub fn live_design(cx: &mut Cx) {
     card_info_section::live_design(cx);
     tag_section::live_design(cx);
     todo_section::live_design(cx);
+    endtime_section::live_design(cx);
     active_section::live_design(cx);
     
     // 主模态框组件（依赖子组件，所以放在最后）

@@ -174,7 +174,6 @@ impl MatrixKanbanAdapter {
         request.is_direct = false;
 
         log!("🎴 Sending create_room request to Matrix server...");
-        log!("🎴 Request details: name='{}', preset=PrivateChat, is_direct=false", title);
         
         // 创建 Room
         let room = match self.client.create_room(request).await {
@@ -191,13 +190,19 @@ impl MatrixKanbanAdapter {
         let card_room_id = room.room_id().to_owned();
         
         log!("✓✓ Room created successfully: {}", card_room_id);
-        log!("🎴 Room object obtained, now verifying it exists in client...");
+
+        // 创建初始的 Card 元数据
+        let card = crate::kanban::state::kanban_state::KanbanCard::new(
+            card_room_id.clone(),
+            title.to_string(),
+            space_id.to_owned(),
+        );
         
-        // 验证room是否在client中
-        if let Some(_) = self.client.get_room(&card_room_id) {
-            log!("✓ Room {} found in client immediately after creation", card_room_id);
-        } else {
-            log!("⚠ WARNING: Room {} NOT found in client immediately after creation!", card_room_id);
+        // 保存元数据到 Matrix State
+        log!("💾 Saving initial card metadata...");
+        if let Err(e) = self.save_card_metadata(&card).await {
+            error!("⚠️ Failed to save card metadata: {:?}", e);
+            // 不返回错误，继续执行
         }
 
         // 将卡片 Room 添加到 Space
@@ -222,17 +227,162 @@ impl MatrixKanbanAdapter {
             .get_room(room_id)
             .context("Room not found")?;
 
-        let display_name = room.display_name().await?;
-        let title = display_name.to_string();
+        // 尝试从 State Event 加载完整元数据
+        match self.load_card_metadata(&room).await {
+            Ok(metadata) => {
+                // 加载 TodoList
+                let todos = self.load_card_todos(&room).await.unwrap_or_default();
+                
+                Ok(crate::kanban::state::kanban_state::KanbanCard {
+                    id: room_id.to_owned(),
+                    title: metadata.title,
+                    description: metadata.description,
+                    space_id,
+                    position: metadata.position,
+                    tags: metadata.tags,
+                    end_time: metadata.end_time,
+                    todos,
+                    created_at: metadata.created_at,
+                    updated_at: metadata.updated_at,
+                })
+            }
+            Err(_) => {
+                // 如果没有元数据，使用默认值
+                let display_name = room.display_name().await?;
+                let title = display_name.to_string();
+                
+                Ok(crate::kanban::state::kanban_state::KanbanCard::new(
+                    room_id.to_owned(),
+                    title,
+                    space_id,
+                ))
+            }
+        }
+    }
+
+    /// 保存 Card 元数据到 Matrix Room State
+    pub async fn save_card_metadata(&self, card: &crate::kanban::state::kanban_state::KanbanCard) -> Result<()> {
+        let room = self.client.get_room(&card.id)
+            .context("Card room not found")?;
         
-        // TODO: 从 state event 读取描述和位置
-        Ok(crate::kanban::state::kanban_state::KanbanCard {
-            id: room_id.to_owned(),
-            title,
-            description: None,
-            space_id,
-            position: 1000.0,
-        })
+        let metadata = serde_json::json!({
+            "title": card.title,
+            "description": card.description,
+            "position": card.position,
+            "end_time": card.end_time,
+            "tags": card.tags,
+            "created_at": card.created_at,
+            "updated_at": card.updated_at,
+        });
+        
+        log!("💾 Saving card metadata for {}", card.id);
+        
+        room.send_state_event_raw(
+            "m.kanban.card.metadata",
+            "",
+            serde_json::value::to_raw_value(&metadata)
+                .context("Failed to serialize card metadata")?,
+        ).await?;
+        
+        log!("✓ Saved card metadata successfully");
+        Ok(())
+    }
+    
+    /// 保存 TodoList 到 Matrix Room State
+    pub async fn save_card_todos(
+        &self,
+        card_id: &RoomId,
+        todos: &[crate::kanban::state::kanban_state::TodoItem]
+    ) -> Result<()> {
+        let room = self.client.get_room(card_id)
+            .context("Card room not found")?;
+        
+        let todos_content = serde_json::json!({
+            "todos": todos,
+        });
+        
+        log!("💾 Saving {} todos for card {}", todos.len(), card_id);
+        
+        room.send_state_event_raw(
+            "m.kanban.card.todos",
+            "",
+            serde_json::value::to_raw_value(&todos_content)
+                .context("Failed to serialize todos")?,
+        ).await?;
+        
+        log!("✓ Saved todos successfully");
+        Ok(())
+    }
+    
+    /// 从 State Event 加载元数据
+    async fn load_card_metadata(&self, room: &Room) -> Result<CardMetadataRaw> {
+        use matrix_sdk::ruma::events::StateEventType;
+        
+        let event_type = StateEventType::from("m.kanban.card.metadata");
+        
+        log!("📖 Loading card metadata from room {}", room.room_id());
+        
+        match room.get_state_event(event_type, "").await {
+            Ok(Some(raw_event)) => {
+                if let Ok(json_str) = serde_json::to_string(&raw_event) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                        if let Some(content) = json.get("content") {
+                            let metadata: CardMetadataRaw = serde_json::from_value(content.clone())
+                                .context("Failed to parse card metadata")?;
+                            log!("✓ Loaded card metadata: title={}", metadata.title);
+                            return Ok(metadata);
+                        }
+                    }
+                }
+                Err(anyhow::anyhow!("Failed to parse card metadata"))
+            }
+            Ok(None) => {
+                log!("⚠ No card metadata found, using defaults");
+                Err(anyhow::anyhow!("No card metadata found"))
+            }
+            Err(e) => {
+                log!("❌ Error loading card metadata: {:?}", e);
+                Err(e.into())
+            }
+        }
+    }
+    
+    /// 从 State Event 加载 TodoList
+    async fn load_card_todos(&self, room: &Room) -> Result<Vec<crate::kanban::state::kanban_state::TodoItem>> {
+        use matrix_sdk::ruma::events::StateEventType;
+        
+        let event_type = StateEventType::from("m.kanban.card.todos");
+        
+        log!("📖 Loading todos from room {}", room.room_id());
+        
+        match room.get_state_event(event_type, "").await {
+            Ok(Some(raw_event)) => {
+                if let Ok(json_str) = serde_json::to_string(&raw_event) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                        if let Some(content) = json.get("content") {
+                            if let Some(todos_array) = content.get("todos").and_then(|v| v.as_array()) {
+                                let todos: Vec<crate::kanban::state::kanban_state::TodoItem> = todos_array
+                                    .iter()
+                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                    .collect();
+                                log!("✓ Loaded {} todos", todos.len());
+                                return Ok(todos);
+                            }
+                        }
+                    }
+                }
+                log!("⚠ Failed to parse todos");
+                Ok(Vec::new())
+            }
+            Ok(None) => {
+                log!("📖 No todos found");
+                Ok(Vec::new())
+            }
+            Err(e) => {
+                log!("❌ Error loading todos: {:?}", e);
+                Ok(Vec::new())
+            }
+        }
     }
 
     /// 将卡片添加到 Space（设置 Space 子关系）
@@ -541,4 +691,108 @@ impl MatrixKanbanAdapter {
         log!("⚠️ No children found for space {} using any strategy", space_id);
         Ok(Vec::new())
     }
+    
+    // ========== Phase 5: Activities Methods ==========
+    
+    /// 发送活动记录（Timeline Event）
+    pub async fn send_activity(
+        &self,
+        card_id: &RoomId,
+        activity_type: crate::kanban::state::kanban_state::ActivityType,
+        text: String,
+        metadata: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let room = self.client.get_room(card_id)
+            .context("Card room not found")?;
+        
+        log!("💬 Sending activity to card {}: type={:?}, text={}", card_id, activity_type, text);
+        
+        // 获取当前用户ID
+        let user_id = self.client.user_id()
+            .context("User not logged in")?
+            .to_string();
+        
+        // 构建活动记录内容
+        let content = serde_json::json!({
+            "msgtype": "m.kanban.card.activity",
+            "activity_type": activity_type,
+            "text": text,
+            "metadata": metadata,
+            "user_id": user_id,
+        });
+        
+        log!("💬 Activity content: {:?}", content);
+        
+        // 发送自定义消息事件
+        room.send_raw("m.room.message", content).await
+            .context("Failed to send activity")?;
+        
+        log!("✓ Activity sent successfully");
+        Ok(())
+    }
+    
+    /// 加载活动记录（从Timeline Events）
+    /// 
+    /// 注意：这是简化实现，实际使用中Timeline API较复杂
+    /// 当前版本仅返回空列表，待后续完善
+    pub async fn load_activities(
+        &self,
+        card_id: &RoomId,
+        _limit: Option<usize>,
+    ) -> Result<Vec<crate::kanban::state::kanban_state::CardActivity>> {
+        let _room = self.client.get_room(card_id)
+            .context("Card room not found")?;
+        
+        log!("📖 Loading activities from card {} (simplified implementation)", card_id);
+        
+        // TODO: 完整的Timeline API实现需要：
+        // 1. 使用 matrix_sdk_ui::timeline::RoomExt trait
+        // 2. 正确处理Timeline items的类型
+        // 3. 实现事件过滤和解析
+        // 
+        // 当前返回空列表，评论功能仍可正常发送
+        let activities = Vec::new();
+        
+        log!("✓ Loaded {} activities (simplified)", activities.len());
+        Ok(activities)
+    }
+    
+    /// 从Timeline Event解析活动记录（占位实现）
+    #[allow(dead_code)]
+    async fn parse_activity_from_event(
+        &self,
+        _event: &str,  // 简化参数类型
+    ) -> Option<crate::kanban::state::kanban_state::CardActivity> {
+        // TODO: 实现完整的事件解析逻辑
+        None
+    }
+}
+
+/// 原始元数据结构（用于反序列化）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct CardMetadataRaw {
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default = "default_position")]
+    pub position: f64,
+    #[serde(default)]
+    pub end_time: Option<u64>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default = "default_timestamp")]
+    pub created_at: u64,
+    #[serde(default = "default_timestamp")]
+    pub updated_at: u64,
+}
+
+fn default_position() -> f64 {
+    1000.0
+}
+
+fn default_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
