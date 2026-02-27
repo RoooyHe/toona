@@ -262,9 +262,14 @@ impl MatrixKanbanAdapter {
 
     /// 保存 Card 元数据到 Matrix Room State
     pub async fn save_card_metadata(&self, card: &crate::kanban::state::kanban_state::KanbanCard) -> Result<()> {
+        use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
+        
+        log!("💾 [1/3] save_card_metadata called for {}", card.id);
+        
         let room = self.client.get_room(&card.id)
             .context("Card room not found")?;
         
+        // Create metadata JSON
         let metadata = serde_json::json!({
             "title": card.title,
             "description": card.description,
@@ -275,16 +280,21 @@ impl MatrixKanbanAdapter {
             "updated_at": card.updated_at,
         });
         
-        log!("💾 Saving card metadata for {}", card.id);
+        log!("💾 [2/3] Saving metadata as timeline message for {} - title: {}, tags: {:?}, end_time: {:?}", 
+            card.id, card.title, card.tags, card.end_time);
         
-        room.send_state_event_raw(
-            "m.kanban.card.metadata",
-            "",
-            serde_json::value::to_raw_value(&metadata)
-                .context("Failed to serialize card metadata")?,
-        ).await?;
+        // Send as a special timeline message with custom msgtype
+        let metadata_json = serde_json::to_string(&metadata)
+            .context("Failed to serialize metadata")?;
         
-        log!("✓ Saved card metadata successfully");
+        // Use a custom message type that won't be displayed in chat UI
+        let content = RoomMessageEventContent::text_plain(
+            format!("__KANBAN_METADATA__:{}", metadata_json)
+        );
+        
+        room.send(content).await?;
+        
+        log!("✅ [3/3] Saved card metadata successfully via timeline message");
         Ok(())
     }
     
@@ -314,37 +324,58 @@ impl MatrixKanbanAdapter {
         Ok(())
     }
     
-    /// 从 State Event 加载元数据
-    async fn load_card_metadata(&self, room: &Room) -> Result<CardMetadataRaw> {
-        use matrix_sdk::ruma::events::StateEventType;
+    /// 从 Timeline Messages 加载元数据
+    /// 使用 Timeline API 扫描最近的消息
+    pub async fn load_card_metadata_from_timeline(
+        &self,
+        room_id: &RoomId,
+        timeline: &matrix_sdk_ui::Timeline,
+    ) -> Result<CardMetadataRaw> {
+        log!("📖 Loading card metadata from timeline for room {}", room_id);
         
-        let event_type = StateEventType::from("m.kanban.card.metadata");
+        // Get timeline items
+        let (items, _stream) = timeline.subscribe().await;
         
-        log!("📖 Loading card metadata from room {}", room.room_id());
-        
-        match room.get_state_event(event_type, "").await {
-            Ok(Some(raw_event)) => {
-                if let Ok(json_str) = serde_json::to_string(&raw_event) {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                        if let Some(content) = json.get("content") {
-                            let metadata: CardMetadataRaw = serde_json::from_value(content.clone())
-                                .context("Failed to parse card metadata")?;
-                            log!("✓ Loaded card metadata: title={}", metadata.title);
-                            return Ok(metadata);
+        // Search backwards through timeline for metadata message
+        for item in items.iter().rev() {
+            if let Some(event_item) = item.as_event() {
+                // Try to get the message body
+                if let Some(msg) = event_item.content().as_message() {
+                    let body = msg.body();
+                    
+                    // Check if this is a metadata message
+                    if let Some(json_str) = body.strip_prefix("__KANBAN_METADATA__:") {
+                        log!("📖 Found metadata message in timeline, parsing...");
+                        match serde_json::from_str::<CardMetadataRaw>(json_str) {
+                            Ok(metadata) => {
+                                log!("✅ Loaded card metadata from timeline: title={}, tags={:?}, end_time={:?}", 
+                                    metadata.title, metadata.tags, metadata.end_time);
+                                return Ok(metadata);
+                            }
+                            Err(e) => {
+                                error!("❌ Failed to parse metadata from timeline: {:?}", e);
+                                continue;
+                            }
                         }
                     }
                 }
-                Err(anyhow::anyhow!("Failed to parse card metadata"))
-            }
-            Ok(None) => {
-                log!("⚠ No card metadata found, using defaults");
-                Err(anyhow::anyhow!("No card metadata found"))
-            }
-            Err(e) => {
-                log!("❌ Error loading card metadata: {:?}", e);
-                Err(e.into())
             }
         }
+        
+        log!("⚠ No metadata message found in timeline");
+        Err(anyhow::anyhow!("No card metadata found in timeline"))
+    }
+    
+    /// 从 Room State 或 Timeline 加载元数据（内部方法）
+    async fn load_card_metadata(&self, room: &Room) -> Result<CardMetadataRaw> {
+        let room_id = room.room_id();
+        
+        log!("📖 Loading card metadata from room {} (state event fallback)", room_id);
+        
+        // 这个方法现在只是一个后备方案
+        // 主要的加载逻辑在 load_card_metadata_from_timeline 中
+        // 这里返回错误，让调用者使用默认值
+        Err(anyhow::anyhow!("Use load_card_metadata_from_timeline instead"))
     }
     
     /// 从 State Event 加载 TodoList

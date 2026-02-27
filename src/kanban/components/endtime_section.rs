@@ -249,6 +249,8 @@ impl Widget for EndTimeSection {
                 
                 // 获取卡片数据
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
+                    log!("🎨 EndTimeSection draw_walk: card_id={}, end_time={:?}", selected_card_id, card.end_time);
+                    
                     // 更新时间显示
                     if let Some(end_time) = card.end_time {
                         let datetime_str = format_timestamp(end_time);
@@ -260,16 +262,24 @@ impl Widget for EndTimeSection {
                             format!("📅 {}", datetime_str)
                         };
                         
+                        log!("🎨 EndTimeSection: Setting time_label to '{}'", display_text);
                         self.view.label(ids!(time_label)).set_text(cx, &display_text);
                         
                         // 显示清除按钮
                         self.view.button(ids!(clear_button)).set_visible(cx, true);
                     } else {
+                        log!("🎨 EndTimeSection: No end_time, showing default text");
                         self.view.label(ids!(time_label)).set_text(cx, "未设置截止时间");
                         self.view.button(ids!(clear_button)).set_visible(cx, false);
                     }
+                } else {
+                    log!("⚠️ EndTimeSection: Card not found in state!");
                 }
+            } else {
+                log!("⚠️ EndTimeSection: No selected_card_id!");
             }
+        } else {
+            log!("⚠️ EndTimeSection: No AppState in scope!");
         }
         
         self.view.draw_walk(cx, scope, walk)

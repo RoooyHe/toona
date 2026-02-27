@@ -760,6 +760,7 @@ impl App {
                 
                 // 添加卡片到 state
                 let space_id = card.space_id.clone();
+                let card_id = card.id.clone();
                 state.upsert_card(card.clone());
                 
                 // 添加卡片 ID 到列表的 card_ids
@@ -767,6 +768,13 @@ impl App {
                     if !list.card_ids.contains(&card.id) {
                         list.card_ids.push(card.id);
                     }
+                }
+                
+                // 如果当前打开的模态框是这张卡片，强制重绘模态框
+                if state.selected_card_id.as_ref() == Some(&card_id) {
+                    log!("🔄 Forcing modal redraw for updated card {}", card_id);
+                    // 强制重绘模态框内容
+                    self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
                 }
                 
                 self.ui.redraw(cx);
@@ -911,6 +919,24 @@ impl App {
             
             KanbanActions::AddTag { card_id, tag } => {
                 log!("🏷️ AddTag: card_id='{}', tag='{}'", card_id, tag);
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if !card.tags.contains(&tag) {
+                        card.tags.push(tag.clone());
+                        card.touch();
+                        log!("✅ Added tag '{}' in memory immediately", tag);
+                        
+                        // 如果模态框打开的是这张卡片，立即重绘
+                        if state.selected_card_id.as_ref() == Some(&card_id) {
+                            log!("🔄 Forcing immediate modal redraw");
+                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        }
+                        self.ui.redraw(cx);
+                    }
+                }
+                
+                // 异步保存到 Matrix
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::AddCardTag { card_id, tag });
                 }
@@ -918,6 +944,22 @@ impl App {
             
             KanbanActions::RemoveTag { card_id, tag } => {
                 log!("🗑️ RemoveTag: card_id='{}', tag='{}'", card_id, tag);
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    card.tags.retain(|t| t != &tag);
+                    card.touch();
+                    log!("✅ Removed tag '{}' in memory immediately", tag);
+                    
+                    // 如果模态框打开的是这张卡片，立即重绘
+                    if state.selected_card_id.as_ref() == Some(&card_id) {
+                        log!("🔄 Forcing immediate modal redraw");
+                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    }
+                    self.ui.redraw(cx);
+                }
+                
+                // 异步保存到 Matrix
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::RemoveCardTag { card_id, tag });
                 }
@@ -927,6 +969,22 @@ impl App {
             
             KanbanActions::SetEndTime { card_id, end_time } => {
                 log!("⏰ SetEndTime: card_id='{}', end_time={}", card_id, end_time);
+                
+                // 立即更新内存中的 state（乐观更新）
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    card.end_time = Some(end_time);
+                    card.touch();
+                    log!("✅ Updated end_time in memory immediately");
+                    
+                    // 如果模态框打开的是这张卡片，立即重绘
+                    if state.selected_card_id.as_ref() == Some(&card_id) {
+                        log!("🔄 Forcing immediate modal redraw");
+                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    }
+                    self.ui.redraw(cx);
+                }
+                
+                // 异步保存到 Matrix
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::SetCardEndTime { card_id, end_time });
                 }
@@ -934,6 +992,22 @@ impl App {
             
             KanbanActions::ClearEndTime { card_id } => {
                 log!("🗑️ ClearEndTime: card_id='{}'", card_id);
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    card.end_time = None;
+                    card.touch();
+                    log!("✅ Cleared end_time in memory immediately");
+                    
+                    // 如果模态框打开的是这张卡片，立即重绘
+                    if state.selected_card_id.as_ref() == Some(&card_id) {
+                        log!("🔄 Forcing immediate modal redraw");
+                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    }
+                    self.ui.redraw(cx);
+                }
+                
+                // 异步保存到 Matrix
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::ClearCardEndTime { card_id });
                 }
