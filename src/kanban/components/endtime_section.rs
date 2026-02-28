@@ -249,7 +249,7 @@ impl Widget for EndTimeSection {
                 
                 // 获取卡片数据
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
-                    log!("🎨 EndTimeSection draw_walk: card_id={}, end_time={:?}", selected_card_id, card.end_time);
+                    // log!("🎨 EndTimeSection draw_walk: card_id={}, end_time={:?}", selected_card_id, card.end_time);
                     
                     // 更新时间显示
                     if let Some(end_time) = card.end_time {
@@ -262,7 +262,7 @@ impl Widget for EndTimeSection {
                             format!("📅 {}", datetime_str)
                         };
                         
-                        log!("🎨 EndTimeSection: Setting time_label to '{}'", display_text);
+                        // log!("🎨 EndTimeSection: Setting time_label to '{}'", display_text);
                         self.view.label(ids!(time_label)).set_text(cx, &display_text);
                         
                         // 显示清除按钮

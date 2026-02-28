@@ -312,105 +312,133 @@ impl MatrixKanbanAdapter {
         });
         
         log!("💾 Saving {} todos for card {}", todos.len(), card_id);
+        log!("💾 Todos content: {:?}", todos_content);
         
-        room.send_state_event_raw(
+        let response = room.send_state_event_raw(
             "m.kanban.card.todos",
             "",
             serde_json::value::to_raw_value(&todos_content)
                 .context("Failed to serialize todos")?,
         ).await?;
         
-        log!("✓ Saved todos successfully");
+        log!("✓ Saved todos successfully, event_id: {:?}", response.event_id);
         Ok(())
     }
     
-    /// 从 Timeline Messages 加载元数据
-    /// 使用 Timeline API 扫描最近的消息
-    pub async fn load_card_metadata_from_timeline(
-        &self,
-        room_id: &RoomId,
-        timeline: &matrix_sdk_ui::Timeline,
-    ) -> Result<CardMetadataRaw> {
-        log!("📖 Loading card metadata from timeline for room {}", room_id);
+    /// 从 Room Messages 加载元数据
+    /// 使用 Matrix /messages API 直接读取最近的消息
+    async fn load_card_metadata(&self, room: &Room) -> Result<CardMetadataRaw> {
+        use matrix_sdk::ruma::api::client::message::get_message_events;
+        use matrix_sdk::ruma::events::{AnySyncTimelineEvent, AnySyncMessageLikeEvent};
+        use matrix_sdk::ruma::events::room::message::{SyncRoomMessageEvent, MessageType};
         
-        // Get timeline items
-        let (items, _stream) = timeline.subscribe().await;
+        let room_id = room.room_id();
         
-        // Search backwards through timeline for metadata message
-        for item in items.iter().rev() {
-            if let Some(event_item) = item.as_event() {
-                // Try to get the message body
-                if let Some(msg) = event_item.content().as_message() {
-                    let body = msg.body();
-                    
-                    // Check if this is a metadata message
-                    if let Some(json_str) = body.strip_prefix("__KANBAN_METADATA__:") {
-                        log!("📖 Found metadata message in timeline, parsing...");
-                        match serde_json::from_str::<CardMetadataRaw>(json_str) {
-                            Ok(metadata) => {
-                                log!("✅ Loaded card metadata from timeline: title={}, tags={:?}, end_time={:?}", 
-                                    metadata.title, metadata.tags, metadata.end_time);
-                                return Ok(metadata);
-                            }
-                            Err(e) => {
-                                error!("❌ Failed to parse metadata from timeline: {:?}", e);
-                                continue;
+        log!("📖 Loading card metadata from room messages {}", room_id);
+        
+        // 使用 Matrix /messages API 获取最近的消息
+        let mut request = get_message_events::v3::Request::backward(room_id.to_owned());
+        request.limit = 50.try_into().unwrap(); // 检查最近 50 条消息
+        
+        match self.client.send(request).await {
+            Ok(response) => {
+                log!("📖 Got {} messages from room", response.chunk.len());
+                
+                // 遍历消息查找 metadata（从最新到最旧，取第一个找到的）
+                // Matrix /messages API 返回的消息是按时间倒序排列的（最新的在前）
+                let mut found_metadata: Option<CardMetadataRaw> = None;
+                
+                for raw_event in response.chunk {
+                    // 尝试反序列化为同步消息事件
+                    if let Ok(event) = raw_event.deserialize_as::<AnySyncTimelineEvent>() {
+                        if let AnySyncTimelineEvent::MessageLike(msg_event) = event {
+                            if let AnySyncMessageLikeEvent::RoomMessage(room_msg) = msg_event {
+                                if let SyncRoomMessageEvent::Original(original) = room_msg {
+                                    if let MessageType::Text(text) = &original.content.msgtype {
+                                        let body = &text.body;
+                                        
+                                        // 检查是否是 metadata 消息
+                                        if let Some(json_str) = body.strip_prefix("__KANBAN_METADATA__:") {
+                                            log!("📖 Found metadata message, parsing...");
+                                            match serde_json::from_str::<CardMetadataRaw>(json_str) {
+                                                Ok(metadata) => {
+                                                    log!("✅ Loaded card metadata: title={}, tags={:?}, end_time={:?}", 
+                                                        metadata.title, metadata.tags, metadata.end_time);
+                                                    // 找到第一个（最新的）metadata 就返回
+                                                    found_metadata = Some(metadata);
+                                                    break;
+                                                }
+                                                Err(e) => {
+                                                    error!("❌ Failed to parse metadata: {:?}", e);
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                
+                if let Some(metadata) = found_metadata {
+                    Ok(metadata)
+                } else {
+                    log!("⚠ No metadata message found in recent messages");
+                    Err(anyhow::anyhow!("No card metadata found"))
+                }
+            }
+            Err(e) => {
+                error!("❌ Error loading messages: {:?}", e);
+                Err(anyhow::anyhow!("Failed to load messages: {}", e))
             }
         }
-        
-        log!("⚠ No metadata message found in timeline");
-        Err(anyhow::anyhow!("No card metadata found in timeline"))
-    }
-    
-    /// 从 Room State 或 Timeline 加载元数据（内部方法）
-    async fn load_card_metadata(&self, room: &Room) -> Result<CardMetadataRaw> {
-        let room_id = room.room_id();
-        
-        log!("📖 Loading card metadata from room {} (state event fallback)", room_id);
-        
-        // 这个方法现在只是一个后备方案
-        // 主要的加载逻辑在 load_card_metadata_from_timeline 中
-        // 这里返回错误，让调用者使用默认值
-        Err(anyhow::anyhow!("Use load_card_metadata_from_timeline instead"))
     }
     
     /// 从 State Event 加载 TodoList
     async fn load_card_todos(&self, room: &Room) -> Result<Vec<crate::kanban::state::kanban_state::TodoItem>> {
-        use matrix_sdk::ruma::events::StateEventType;
+        use matrix_sdk::ruma::api::client::state::get_state_events;
         
-        let event_type = StateEventType::from("m.kanban.card.todos");
+        let room_id = room.room_id();
+        log!("📖 Loading todos from room {} (using server API)", room_id);
         
-        log!("📖 Loading todos from room {}", room.room_id());
+        // 使用服务器 API 直接获取所有 State Events
+        let request = get_state_events::v3::Request::new(room_id.to_owned());
         
-        match room.get_state_event(event_type, "").await {
-            Ok(Some(raw_event)) => {
-                if let Ok(json_str) = serde_json::to_string(&raw_event) {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                        if let Some(content) = json.get("content") {
-                            if let Some(todos_array) = content.get("todos").and_then(|v| v.as_array()) {
-                                let todos: Vec<crate::kanban::state::kanban_state::TodoItem> = todos_array
-                                    .iter()
-                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                    .collect();
-                                log!("✓ Loaded {} todos", todos.len());
-                                return Ok(todos);
+        match self.client.send(request).await {
+            Ok(response) => {
+                log!("📖 Got {} state events from server", response.room_state.len());
+                
+                // 查找 m.kanban.card.todos 事件
+                for raw_event in response.room_state {
+                    let json_str = raw_event.json().get();
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
+                        // 检查 event type
+                        if let Some(event_type_str) = json.get("type").and_then(|v| v.as_str()) {
+                            if event_type_str == "m.kanban.card.todos" {
+                                log!("📖 Found m.kanban.card.todos event");
+                                if let Some(content) = json.get("content") {
+                                    log!("📖 State event content: {:?}", content);
+                                    if let Some(todos_array) = content.get("todos").and_then(|v| v.as_array()) {
+                                        log!("📖 Todos array length: {}", todos_array.len());
+                                        let todos: Vec<crate::kanban::state::kanban_state::TodoItem> = todos_array
+                                            .iter()
+                                            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                            .collect();
+                                        log!("✅ Loaded {} todos successfully from server", todos.len());
+                                        return Ok(todos);
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                log!("⚠ Failed to parse todos");
-                Ok(Vec::new())
-            }
-            Ok(None) => {
-                log!("📖 No todos found");
+                
+                log!("📖 No m.kanban.card.todos event found in room state");
                 Ok(Vec::new())
             }
             Err(e) => {
-                log!("❌ Error loading todos: {:?}", e);
+                error!("❌ Error loading state events from server: {:?}", e);
                 Ok(Vec::new())
             }
         }

@@ -805,16 +805,28 @@ impl App {
                 // 显示卡片详情
                 log!("ShowCardDetail: card_id='{}'", card_id);
                 
-                // 存储当前要显示的卡片 ID
-                self.app_state.kanban_state.selected_card_id = Some(card_id.clone());
-                
-                // 加载活动记录
+                // 重新从 Matrix 加载完整的卡片数据（包括 todos）
+                // 这确保即使重启后也能看到最新的数据
                 if get_client().is_some() {
+                    // 获取卡片所属的 space_id
+                    if let Some(card) = state.cards.get(&card_id) {
+                        let space_id = card.space_id.clone();
+                        log!("🔄 Reloading card {} from Matrix to get fresh data", card_id);
+                        submit_async_request(MatrixRequest::LoadCard {
+                            card_id: card_id.clone(),
+                            space_id,
+                        });
+                    }
+                    
+                    // 加载活动记录
                     submit_async_request(MatrixRequest::LoadCardActivities {
-                        card_id,
+                        card_id: card_id.clone(),
                         limit: Some(50),
                     });
                 }
+                
+                // 存储当前要显示的卡片 ID
+                state.selected_card_id = Some(card_id);
                 
                 // 打开卡片详情模态框
                 self.ui.modal(ids!(card_detail_modal)).open(cx);
@@ -889,29 +901,114 @@ impl App {
             
             KanbanActions::AddTodo { card_id, text } => {
                 log!("📝 AddTodo: card_id='{}', text='{}'", card_id, text);
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::AddCardTodo { card_id, text });
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    let new_todo = crate::kanban::state::kanban_state::TodoItem::new(text.clone());
+                    card.todos.push(new_todo);
+                    card.touch();
+                    log!("✅ Added todo in memory immediately");
+                    
+                    // 如果模态框打开的是这张卡片，立即重绘
+                    if state.selected_card_id.as_ref() == Some(&card_id) {
+                        log!("🔄 Forcing immediate modal redraw");
+                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    }
+                    self.ui.redraw(cx);
+                    
+                    // 异步保存到 Matrix（传递完整的todos列表）
+                    if get_client().is_some() {
+                        let todos_clone = card.todos.clone();
+                        submit_async_request(MatrixRequest::SaveCardTodos { 
+                            card_id: card_id.clone(), 
+                            todos: todos_clone 
+                        });
+                    }
                 }
             }
             
             KanbanActions::ToggleTodo { card_id, todo_id } => {
                 log!("✅ ToggleTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::ToggleCardTodo { card_id, todo_id });
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
+                        todo.completed = !todo.completed;
+                        card.touch();
+                        log!("✅ Toggled todo in memory immediately");
+                        
+                        // 如果模态框打开的是这张卡片，立即重绘
+                        if state.selected_card_id.as_ref() == Some(&card_id) {
+                            log!("🔄 Forcing immediate modal redraw");
+                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        }
+                        self.ui.redraw(cx);
+                        
+                        // 异步保存到 Matrix
+                        if get_client().is_some() {
+                            let todos_clone = card.todos.clone();
+                            submit_async_request(MatrixRequest::SaveCardTodos { 
+                                card_id: card_id.clone(), 
+                                todos: todos_clone 
+                            });
+                        }
+                    }
                 }
             }
             
             KanbanActions::UpdateTodoText { card_id, todo_id, text } => {
                 log!("✏️ UpdateTodoText: card_id='{}', todo_id='{}', text='{}'", card_id, todo_id, text);
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::UpdateCardTodoText { card_id, todo_id, text });
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
+                        todo.text = text.clone();
+                        card.touch();
+                        log!("✅ Updated todo text in memory immediately");
+                        
+                        // 如果模态框打开的是这张卡片，立即重绘
+                        if state.selected_card_id.as_ref() == Some(&card_id) {
+                            log!("🔄 Forcing immediate modal redraw");
+                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        }
+                        self.ui.redraw(cx);
+                        
+                        // 异步保存到 Matrix
+                        if get_client().is_some() {
+                            let todos_clone = card.todos.clone();
+                            submit_async_request(MatrixRequest::SaveCardTodos { 
+                                card_id: card_id.clone(), 
+                                todos: todos_clone 
+                            });
+                        }
+                    }
                 }
             }
             
             KanbanActions::DeleteTodo { card_id, todo_id } => {
                 log!("🗑️ DeleteTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::DeleteCardTodo { card_id, todo_id });
+                
+                // 立即更新内存中的 state
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    card.todos.retain(|t| t.id != todo_id);
+                    card.touch();
+                    log!("✅ Deleted todo in memory immediately");
+                    
+                    // 如果模态框打开的是这张卡片，立即重绘
+                    if state.selected_card_id.as_ref() == Some(&card_id) {
+                        log!("🔄 Forcing immediate modal redraw");
+                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    }
+                    self.ui.redraw(cx);
+                    
+                    // 异步保存到 Matrix
+                    if get_client().is_some() {
+                        let todos_clone = card.todos.clone();
+                        submit_async_request(MatrixRequest::SaveCardTodos { 
+                            card_id: card_id.clone(), 
+                            todos: todos_clone 
+                        });
+                    }
                 }
             }
             
@@ -933,12 +1030,13 @@ impl App {
                             self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
                         }
                         self.ui.redraw(cx);
+                        
+                        // 异步保存到 Matrix（传递完整的卡片数据）
+                        if get_client().is_some() {
+                            let card_clone = card.clone();
+                            submit_async_request(MatrixRequest::SaveCardMetadata { card: card_clone });
+                        }
                     }
-                }
-                
-                // 异步保存到 Matrix
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::AddCardTag { card_id, tag });
                 }
             }
             
@@ -957,11 +1055,12 @@ impl App {
                         self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
-                }
-                
-                // 异步保存到 Matrix
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::RemoveCardTag { card_id, tag });
+                    
+                    // 异步保存到 Matrix（传递完整的卡片数据）
+                    if get_client().is_some() {
+                        let card_clone = card.clone();
+                        submit_async_request(MatrixRequest::SaveCardMetadata { card: card_clone });
+                    }
                 }
             }
             
@@ -982,11 +1081,12 @@ impl App {
                         self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
-                }
-                
-                // 异步保存到 Matrix
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::SetCardEndTime { card_id, end_time });
+                    
+                    // 异步保存到 Matrix（传递完整的卡片数据）
+                    if get_client().is_some() {
+                        let card_clone = card.clone();
+                        submit_async_request(MatrixRequest::SaveCardMetadata { card: card_clone });
+                    }
                 }
             }
             
@@ -1005,11 +1105,12 @@ impl App {
                         self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
-                }
-                
-                // 异步保存到 Matrix
-                if get_client().is_some() {
-                    submit_async_request(MatrixRequest::ClearCardEndTime { card_id });
+                    
+                    // 异步保存到 Matrix（传递完整的卡片数据）
+                    if get_client().is_some() {
+                        let card_clone = card.clone();
+                        submit_async_request(MatrixRequest::SaveCardMetadata { card: card_clone });
+                    }
                 }
             }
             

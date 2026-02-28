@@ -547,59 +547,26 @@ pub enum MatrixRequest {
         space_id: OwnedRoomId,
         title: String,
     },
+    /// Request to load a single card with all its data (metadata, todos, etc.)
+    LoadCard {
+        card_id: OwnedRoomId,
+        space_id: OwnedRoomId,
+    },
     
     // ========== Phase 2: TodoList Requests ==========
     
-    /// Request to add a todo to a card
-    AddCardTodo {
+    /// Request to save complete todos list for a card
+    SaveCardTodos {
         card_id: OwnedRoomId,
-        text: String,
-    },
-    
-    /// Request to toggle a todo's completion status
-    ToggleCardTodo {
-        card_id: OwnedRoomId,
-        todo_id: String,
-    },
-    
-    /// Request to update a todo's text
-    UpdateCardTodoText {
-        card_id: OwnedRoomId,
-        todo_id: String,
-        text: String,
-    },
-    
-    /// Request to delete a todo
-    DeleteCardTodo {
-        card_id: OwnedRoomId,
-        todo_id: String,
+        todos: Vec<crate::kanban::state::kanban_state::TodoItem>,
     },
     
     // ========== Phase 3: Tags Request ==========
     
-    /// Request to add a tag to a card
-    AddCardTag {
-        card_id: OwnedRoomId,
-        tag: String,
-    },
-    
-    /// Request to remove a tag from a card
-    RemoveCardTag {
-        card_id: OwnedRoomId,
-        tag: String,
-    },
-    
-    // ========== Phase 4: EndTime Requests ==========
-    
-    /// Request to set end time for a card
-    SetCardEndTime {
-        card_id: OwnedRoomId,
-        end_time: u64,  // Unix timestamp in seconds
-    },
-    
-    /// Request to clear end time from a card
-    ClearCardEndTime {
-        card_id: OwnedRoomId,
+    /// Request to save complete card metadata (tags, endtime, etc.)
+    /// This replaces individual AddCardTag, RemoveCardTag, SetCardEndTime, ClearCardEndTime
+    SaveCardMetadata {
+        card: crate::kanban::state::kanban_state::KanbanCard,
     },
     
     // ========== Phase 5: Activities Requests ==========
@@ -1853,6 +1820,31 @@ async fn matrix_worker_task(
                 });
             }
 
+            MatrixRequest::LoadCard { card_id, space_id } => {
+                let Some(client) = get_client() else {
+                    error!("Cannot load card: Matrix client not available");
+                    continue;
+                };
+
+                let _load_card_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    
+                    log!("🔄 Loading card {} from Matrix (including todos)...", card_id);
+                    let adapter = MatrixKanbanAdapter::new(client);
+                    
+                    match adapter.load_card(&card_id, space_id).await {
+                        Ok(card) => {
+                            log!("✅ Successfully loaded card: {} with {} todos", card.title, card.todos.len());
+                            Cx::post_action(KanbanActions::CardLoaded(card));
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to load card {}: {e:?}", card_id);
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+
             MatrixRequest::CreateKanbanList { name } => {
                 let Some(client) = get_client() else {
                     error!("Cannot create kanban list: Matrix client not available");
@@ -1966,340 +1958,61 @@ async fn matrix_worker_task(
                 log!("🚀 Task spawned successfully");
             }
             
-            // ========== Phase 2: TodoList Request Handlers ==========
+            // ========== Phase 2: Unified Todos Save Handler ==========
             
-            MatrixRequest::AddCardTodo { card_id, text } => {
-                log!("📝 MatrixRequest::AddCardTodo received! card_id={}, text={}", card_id, text);
+            MatrixRequest::SaveCardTodos { card_id, todos } => {
+                log!("📝 MatrixRequest::SaveCardTodos received! card_id={}, todos_count={}", card_id, todos.len());
                 
                 let Some(client) = get_client() else {
-                    error!("❌ Cannot add todo: Matrix client not available");
+                    error!("❌ Cannot save todos: Matrix client not available");
                     continue;
                 };
                 
-                let _add_todo_task = Handle::current().spawn(async move {
+                let _save_todos_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    use crate::kanban::state::kanban_state::TodoItem;
                     
-                    log!("📝 Task started: Adding todo to card {}", card_id);
+                    log!("📝 Task started: Saving {} todos for card {}", todos.len(), card_id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
                     
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Add new todo
-                            let new_todo = TodoItem::new(text);
-                            card.todos.push(new_todo);
-                            card.touch();
-                            
-                            // Save todos
-                            match adapter.save_card_todos(&card_id, &card.todos).await {
-                                Ok(_) => {
-                                    log!("✅ Successfully added todo to card {}", card_id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("❌ Failed to save todos: {e:?}");
-                                }
-                            }
+                    // Save todos directly (no need to load first)
+                    match adapter.save_card_todos(&card_id, &todos).await {
+                        Ok(_) => {
+                            log!("✅ Successfully saved todos for card {}", card_id);
+                            // No need to post CardLoaded since memory is already updated
                         }
                         Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
+                            error!("❌ Failed to save todos: {e:?}");
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
             
-            MatrixRequest::ToggleCardTodo { card_id, todo_id } => {
-                log!("✅ MatrixRequest::ToggleCardTodo received! card_id={}, todo_id={}", card_id, todo_id);
+            // ========== Phase 3 & 4: Unified Metadata Save Handler ==========
+            
+            MatrixRequest::SaveCardMetadata { card } => {
+                log!("💾 MatrixRequest::SaveCardMetadata received! card_id={}, tags={:?}, end_time={:?}", 
+                    card.id, card.tags, card.end_time);
                 
                 let Some(client) = get_client() else {
-                    error!("❌ Cannot toggle todo: Matrix client not available");
+                    error!("❌ Cannot save metadata: Matrix client not available");
                     continue;
                 };
                 
-                let _toggle_todo_task = Handle::current().spawn(async move {
+                let _save_metadata_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("✅ Task started: Toggling todo {} in card {}", todo_id, card_id);
+                    log!("💾 Task started: Saving metadata for card {}", card.id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
                     
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Find and toggle todo
-                            if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
-                                todo.toggle();
-                                card.touch();
-                                
-                                // Save todos
-                                match adapter.save_card_todos(&card_id, &card.todos).await {
-                                    Ok(_) => {
-                                        log!("✅ Successfully toggled todo {} in card {}", todo_id, card_id);
-                                        Cx::post_action(KanbanActions::CardLoaded(card));
-                                    }
-                                    Err(e) => {
-                                        error!("❌ Failed to save todos: {e:?}");
-                                    }
-                                }
-                            } else {
-                                error!("❌ Todo {} not found in card {}", todo_id, card_id);
-                            }
+                    // Save metadata directly (no need to load first)
+                    match adapter.save_card_metadata(&card).await {
+                        Ok(_) => {
+                            log!("✅ Successfully saved metadata for card {}", card.id);
+                            // No need to post CardLoaded since memory is already updated
                         }
                         Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            MatrixRequest::UpdateCardTodoText { card_id, todo_id, text } => {
-                log!("✏️ MatrixRequest::UpdateCardTodoText received! card_id={}, todo_id={}, text={}", card_id, todo_id, text);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot update todo: Matrix client not available");
-                    continue;
-                };
-                
-                let _update_todo_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("✏️ Task started: Updating todo {} in card {}", todo_id, card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Find and update todo
-                            if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
-                                todo.text = text;
-                                card.touch();
-                                
-                                // Save todos
-                                match adapter.save_card_todos(&card_id, &card.todos).await {
-                                    Ok(_) => {
-                                        log!("✅ Successfully updated todo {} in card {}", todo_id, card_id);
-                                        Cx::post_action(KanbanActions::CardLoaded(card));
-                                    }
-                                    Err(e) => {
-                                        error!("❌ Failed to save todos: {e:?}");
-                                    }
-                                }
-                            } else {
-                                error!("❌ Todo {} not found in card {}", todo_id, card_id);
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            MatrixRequest::DeleteCardTodo { card_id, todo_id } => {
-                log!("🗑️ MatrixRequest::DeleteCardTodo received! card_id={}, todo_id={}", card_id, todo_id);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot delete todo: Matrix client not available");
-                    continue;
-                };
-                
-                let _delete_todo_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🗑️ Task started: Deleting todo {} from card {}", todo_id, card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Remove todo
-                            card.todos.retain(|t| t.id != todo_id);
-                            card.touch();
-                            
-                            // Save todos
-                            match adapter.save_card_todos(&card_id, &card.todos).await {
-                                Ok(_) => {
-                                    log!("✅ Successfully deleted todo {} from card {}", todo_id, card_id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("❌ Failed to save todos: {e:?}");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            // ========== Phase 3: Tags Request Handlers ==========
-            
-            MatrixRequest::AddCardTag { card_id, tag } => {
-                log!("🏷️ MatrixRequest::AddCardTag received! card_id={}, tag={}", card_id, tag);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot add tag: Matrix client not available");
-                    continue;
-                };
-                
-                let _add_tag_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🏷️ Task started: Adding tag '{}' to card {}", tag, card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Add tag if not already present
-                            if !card.tags.contains(&tag) {
-                                card.tags.push(tag.clone());
-                                card.touch();
-                                
-                                // Save metadata
-                                match adapter.save_card_metadata(&card).await {
-                                    Ok(_) => {
-                                        log!("✅ Successfully added tag '{}' to card {}", tag, card_id);
-                                        Cx::post_action(KanbanActions::CardLoaded(card));
-                                    }
-                                    Err(e) => {
-                                        error!("❌ Failed to save card metadata: {e:?}");
-                                    }
-                                }
-                            } else {
-                                log!("⚠️ Tag '{}' already exists in card {}", tag, card_id);
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            MatrixRequest::RemoveCardTag { card_id, tag } => {
-                log!("🗑️ MatrixRequest::RemoveCardTag received! card_id={}, tag={}", card_id, tag);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot remove tag: Matrix client not available");
-                    continue;
-                };
-                
-                let _remove_tag_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🗑️ Task started: Removing tag '{}' from card {}", tag, card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Remove tag
-                            card.tags.retain(|t| t != &tag);
-                            card.touch();
-                            
-                            // Save metadata
-                            match adapter.save_card_metadata(&card).await {
-                                Ok(_) => {
-                                    log!("✅ Successfully removed tag '{}' from card {}", tag, card_id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("❌ Failed to save card metadata: {e:?}");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            // ========== Phase 4: EndTime Request Handlers ==========
-            
-            MatrixRequest::SetCardEndTime { card_id, end_time } => {
-                log!("⏰ MatrixRequest::SetCardEndTime received! card_id={}, end_time={}", card_id, end_time);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot set end time: Matrix client not available");
-                    continue;
-                };
-                
-                let _set_end_time_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("⏰ Task started: Setting end time {} for card {}", end_time, card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Set end time
-                            card.end_time = Some(end_time);
-                            card.touch();
-                            
-                            // Save metadata
-                            match adapter.save_card_metadata(&card).await {
-                                Ok(_) => {
-                                    log!("✅ Successfully set end time for card {}", card_id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("❌ Failed to save card metadata: {e:?}");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
-                        }
-                    }
-                    SignalToUI::set_ui_signal();
-                });
-            }
-            
-            MatrixRequest::ClearCardEndTime { card_id } => {
-                log!("🗑️ MatrixRequest::ClearCardEndTime received! card_id={}", card_id);
-                
-                let Some(client) = get_client() else {
-                    error!("❌ Cannot clear end time: Matrix client not available");
-                    continue;
-                };
-                
-                let _clear_end_time_task = Handle::current().spawn(async move {
-                    use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🗑️ Task started: Clearing end time from card {}", card_id);
-                    let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    // Load current card
-                    match adapter.load_card(&card_id, card_id.clone()).await {
-                        Ok(mut card) => {
-                            // Clear end time
-                            card.end_time = None;
-                            card.touch();
-                            
-                            // Save metadata
-                            match adapter.save_card_metadata(&card).await {
-                                Ok(_) => {
-                                    log!("✅ Successfully cleared end time from card {}", card_id);
-                                    Cx::post_action(KanbanActions::CardLoaded(card));
-                                }
-                                Err(e) => {
-                                    error!("❌ Failed to save card metadata: {e:?}");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to load card: {e:?}");
+                            error!("❌ Failed to save card metadata: {e:?}");
                         }
                     }
                     SignalToUI::set_ui_signal();

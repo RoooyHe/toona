@@ -9,35 +9,38 @@ live_design! {
         width: Fit,
         height: Fit,
         flow: Right,
-        spacing: 5,
+        spacing: 8,
         align: {y: 0.5},
-        padding: {top: 3, bottom: 3, left: 8, right: 8},
-        margin: {right: 5, bottom: 5},
+        padding: {top: 8, bottom: 8, left: 15, right: 15},
+        margin: {right: 10, bottom: 10},
         draw_bg: {
             color: #x4ECDC4,
-            radius: 12.0,
+            radius: 16.0,
         }
 
         // 标签文本
         tag_text = <Label> {
+            width: Fit,
+            height: Fit,
             text: "标签",
             draw_text: {
                 color: #FFFFFF,
-                text_style: <THEME_FONT_REGULAR>{font_size: 12}
+                text_style: <THEME_FONT_REGULAR>{font_size: 15}
             }
         }
 
         // 删除按钮
         remove_btn = <Button> {
-            width: 16,
-            height: 16,
+            width: 24,
+            height: 24,
+            margin: {left: 5},
             text: "×",
             draw_bg: {
                 color: #00000000,
             }
             draw_text: {
                 color: #FFFFFF,
-                text_style: <THEME_FONT_BOLD>{font_size: 14}
+                text_style: <THEME_FONT_BOLD>{font_size: 20}
             }
         }
     }
@@ -68,25 +71,35 @@ live_design! {
             <View> { width: Fill, height: Fit }
         }
 
-        // 标签列表
-        tag_list = <PortalList> {
+        // 标签列表容器
+        <View> {
             width: Fill,
             height: Fit,
-            flow: RightWrap,
-            spacing: 0,
+            flow: Down,
+            spacing: 5,
+            
+            // 标签列表
+            tag_list = <PortalList> {
+                width: Fill,
+                height: Fit,
+                flow: RightWrap,
+                spacing: 5,
+                padding: {top: 5, bottom: 5},
 
-            TagItem = <TagItem> {}
-        }
+                TagItem = <TagItem> {}
+            }
 
-        // 空状态提示
-        empty_label = <Label> {
-            width: Fill,
-            height: Fit,
-            text: "暂无标签",
-            visible: true,
-            draw_text: {
-                color: #x95A5A6,
-                text_style: <THEME_FONT_REGULAR>{font_size: 13}
+            // 空状态提示
+            empty_label = <Label> {
+                width: Fill,
+                height: Fit,
+                padding: {top: 10, bottom: 10},
+                text: "暂无标签",
+                visible: false,
+                draw_text: {
+                    color: #x95A5A6,
+                    text_style: <THEME_FONT_REGULAR>{font_size: 13}
+                }
             }
         }
 
@@ -277,7 +290,7 @@ impl Widget for TagSection {
                 self.card_id = Some(selected_card_id.clone());
                 
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
-                    log!("🎨 TagSection draw_walk: card_id={}, tags={:?}", selected_card_id, card.tags);
+                    log!("🏷️ TagSection draw_walk: card_id={}, tags={:?}", selected_card_id, card.tags);
                     card.tags.clone()
                 } else {
                     log!("⚠️ TagSection: Card not found in state!");
@@ -292,14 +305,7 @@ impl Widget for TagSection {
             Vec::new()
         };
 
-        log!("🎨 TagSection: Rendering {} tags", tags.len());
-
-        // 显示/隐藏空状态提示
-        if tags.is_empty() {
-            self.view.label(ids!(empty_label)).set_visible(cx, true);
-        } else {
-            self.view.label(ids!(empty_label)).set_visible(cx, false);
-        }
+        log!("🏷️ TagSection: Rendering {} tags", tags.len());
 
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
@@ -312,6 +318,8 @@ impl Widget for TagSection {
 
                     let tag_item_widget = list.item(cx, tag_idx, live_id!(TagItem));
                     let tag = &tags[tag_idx];
+                    
+                    log!("🏷️ TagSection: Rendering tag #{}: '{}'", tag_idx, tag);
                     
                     // 设置标签文本
                     tag_item_widget.label(ids!(tag_text)).set_text(cx, tag);
@@ -327,6 +335,16 @@ impl Widget for TagSection {
                 }
             }
         }
+        
+        // 在 draw_walk 之后设置可见性
+        if tags.is_empty() {
+            log!("🏷️ TagSection: Showing empty_label");
+            self.view.label(ids!(empty_label)).set_visible(cx, true);
+        } else {
+            log!("🏷️ TagSection: Hiding empty_label, showing {} tags", tags.len());
+            self.view.label(ids!(empty_label)).set_visible(cx, false);
+        }
+        
         DrawStep::done()
     }
 }

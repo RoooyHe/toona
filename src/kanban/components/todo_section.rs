@@ -21,8 +21,6 @@ live_design! {
             draw_bg: {
                 color: #FFFFFF,
                 border_color: #DFE1E6,
-                border_width: 2.0,
-                radius: 3.0,
             }
         }
 
@@ -44,7 +42,6 @@ live_design! {
             text: "删除",
             draw_bg: {
                 color: #FF6B6B,
-                radius: 3.0,
             }
             draw_text: {
                 color: #FFFFFF,
@@ -91,7 +88,7 @@ live_design! {
         // Todo列表（使用PortalList）
         todo_list = <PortalList> {
             width: Fill,
-            height: Fit,
+            height: 200,  // 给一个固定高度
             flow: Down,
             spacing: 5,
 
@@ -301,26 +298,34 @@ impl Widget for TodoSection {
                     let progress_text = format!("{}/{}", completed, total);
                     self.view.label(ids!(progress_label)).set_text(cx, &progress_text);
                     
+                    // log!("🎨 TodoSection draw_walk: card_id={}, todos_count={}", selected_card_id, card.todos.len());
+                    
                     // 克隆todos列表
                     card.todos.clone()
                 } else {
+                    log!("⚠️ TodoSection: Card not found in state");
                     Vec::new()
                 }
             } else {
+                log!("⚠️ TodoSection: No selected_card_id");
                 Vec::new()
             }
         } else {
+            log!("⚠️ TodoSection: No AppState in scope");
             Vec::new()
         };
 
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
+                // log!("🎨 TodoSection: Setting PortalList item range to {}", todos.len());
                 list.set_item_range(cx, 0, todos.len());
 
                 while let Some(todo_idx) = list.next_visible_item(cx) {
                     if todo_idx >= todos.len() {
                         continue;
                     }
+
+                    // log!("🎨 TodoSection: Rendering todo #{}: '{}'", todo_idx, todos[todo_idx].text);
 
                     let todo_item_widget = list.item(cx, todo_idx, live_id!(TodoItem));
                     let todo = &todos[todo_idx];
