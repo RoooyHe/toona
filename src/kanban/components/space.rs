@@ -22,21 +22,18 @@ live_design! {
                 flow: Right,
                 align: {y: 0.5},
 
-                space_title_input = <TextInput> {
+                space_title_label = <Button> {
                     width: Fill,
                     height: 35,
                     text: "空间标题",
+                    draw_bg: {
+                        color: #F8F9FAFF
+                    }
                     draw_text: {
                         color: #333333FF,
                         text_style: {
                             font_size: 18.0,
                         }
-                    }
-                    draw_bg: {
-                        color: #F8F9FAFF
-                    }
-                    draw_cursor: {
-                        color: #333333FF
                     }
                 }
             }
@@ -85,8 +82,22 @@ impl Widget for SpaceColumn {
         
         self.view.handle_event(cx, event, scope);
         
-        // 处理列表标题输入框事件
+        // 处理列表标题按钮点击事件
         if let Event::Actions(actions) = event {
+            // 处理标题按钮点击 - 打开编辑模态框
+            if self.view.button(ids!(space_title_label)).clicked(actions) {
+                if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
+                    let current_name = self.view.button(ids!(space_title_label)).text();
+                    log!("SpaceColumn: 点击标题按钮，打开编辑模态框: '{}'", current_name);
+                    
+                    // 发送 action 到 app.rs 打开编辑模态框
+                    cx.action(crate::kanban::KanbanActions::ShowEditListName {
+                        list_id: space_id.clone(),
+                        current_name: current_name.to_string(),
+                    });
+                }
+            }
+            
             // 只在按钮被点击时才输出日志
             if self.view.button(ids!(create_button)).clicked(actions) {
                 log!("🎯🎯🎯 SpaceColumn: 创建卡片按钮被点击!!!");
@@ -105,21 +116,6 @@ impl Widget for SpaceColumn {
                     log!("❌ SpaceColumn: 没有找到 space_id in scope.props");
                 }
                 cx.redraw_all();
-            }
-            
-            // 处理标题输入框文本变化（静默处理，不输出日志）
-            if let Some(_text) = self.view.text_input(ids!(space_title_input)).changed(actions) {
-                // 静默处理
-            }
-            
-            // 处理标题输入框回车
-            if let Some((text, _)) = self.view.text_input(ids!(space_title_input)).returned(actions) {
-                if let Some(list_id) = &self.list_id {
-                    if !text.trim().is_empty() {
-                        log!("SpaceColumn: 回车更新列表标题: '{}' (列表ID: {})", text.trim(), list_id);
-                        // TODO: 触发更新列表标题的 Action
-                    }
-                }
             }
         }
     }
@@ -195,7 +191,7 @@ impl Widget for SpaceList {
 
                     // 设置列表标题
                     space_item
-                        .text_input(ids!(space_title_input))
+                        .button(ids!(space_title_label))
                         .set_text(cx, &kanban_list.name);
 
                     // 设置背景颜色

@@ -6,6 +6,7 @@ pub mod card_item;
 pub mod card_modal;
 pub mod boards_list;
 pub mod card_detail_view;
+pub mod edit_list_name_modal;
 
 // 模态框子组件
 pub mod modal_header;
@@ -19,6 +20,7 @@ pub use space::*;
 pub use card_list::*;
 pub use boards_list::*;
 pub use card_detail_view::*;
+pub use edit_list_name_modal::*;
 
 // 导出组件的 live_design
 pub fn live_design(cx: &mut Cx) {
@@ -27,6 +29,7 @@ pub fn live_design(cx: &mut Cx) {
     card_item::live_design(cx);
     boards_list::live_design(cx);
     card_detail_view::live_design(cx);
+    edit_list_name_modal::live_design(cx);
     
     // 模态框子组件
     modal_header::live_design(cx);

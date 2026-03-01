@@ -20,6 +20,7 @@ use crate::{
     kanban::{
         KanbanActions, KanbanAppState,
     },
+    kanban::components::edit_list_name_modal::EditListNameModalWidgetRefExt,
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
         LogoutAction, LogoutConfirmModalAction, LogoutConfirmModalWidgetRefExt,
@@ -63,6 +64,7 @@ live_design! {
     use crate::shared::image_viewer::ImageViewer;
     use link::tsp_link::TspVerificationModal;
     use crate::kanban::components::card_modal::CardDetailModal;
+    use crate::kanban::components::edit_list_name_modal::EditListNameModal;
 
 
     App = {{App}} {
@@ -153,6 +155,13 @@ live_design! {
 
                         // Show the card detail modal for kanban cards
                         card_detail_modal = <CardDetailModal> {}
+                        
+                        // Show the edit list name modal for kanban lists
+                        edit_list_name_modal = <Modal> {
+                            content: {
+                                edit_list_name_modal_inner = <EditListNameModal> {}
+                            }
+                        }
 
                         // Show incoming verification requests in front of the aforementioned UI elements.
                         verification_modal = <Modal> {
@@ -540,6 +549,14 @@ impl MatchEvent for App {
                 continue;
             }
 
+            // Handle edit list name modal buttons
+            if self.ui.button(ids!(edit_list_name_modal_inner.save_button)).clicked(actions)
+                || self.ui.button(ids!(edit_list_name_modal_inner.cancel_button)).clicked(actions)
+            {
+                self.ui.modal(ids!(edit_list_name_modal)).close(cx);
+                continue;
+            }
+
             // // message source modal handling.
             // match action.as_widget_action().cast() {
             //     MessageAction::MessageSourceModalOpen { room_id: _, event_id: _, original_json: _ } => {
@@ -786,6 +803,40 @@ impl App {
                     submit_async_request(MatrixRequest::CreateKanbanList { name });
                     state.loading = true;
                 }
+            }
+
+            KanbanActions::UpdateListName { list_id, name } => {
+                // 更新列表名称
+                log!("UpdateListName: list_id='{}', name='{}'", list_id, name);
+                
+                // 使用 update_list_name 方法只更新名称，保留卡片
+                state.update_list_name(&list_id, name.clone());
+                log!("✅ UpdateListName: 本地状态已更新，列表名称改为 '{}'", name);
+                
+                // 同步到 Matrix 服务器
+                if get_client().is_some() {
+                    submit_async_request(MatrixRequest::UpdateKanbanListName {
+                        list_id,
+                        name,
+                    });
+                }
+                
+                // 强制重绘整个 UI 以更新列表名称显示
+                self.ui.redraw(cx);
+                cx.redraw_all();
+            }
+            
+            KanbanActions::ShowEditListName { list_id, current_name } => {
+                // 显示编辑列表名称模态框
+                log!("ShowEditListName: list_id='{}', current_name='{}'", list_id, current_name);
+                
+                // 设置数据
+                self.ui
+                    .edit_list_name_modal(ids!(edit_list_name_modal_inner))
+                    .set_data(cx, list_id, &current_name);
+                
+                // 打开模态框
+                self.ui.modal(ids!(edit_list_name_modal)).open(cx);
             }
 
             KanbanActions::CreateCard { space_id, title } => {

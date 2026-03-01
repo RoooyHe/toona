@@ -9,13 +9,13 @@ live_design! {
         width: Fit,
         height: Fit,
         flow: Right,
-        spacing: 8,
+        spacing: 5,
         align: {y: 0.5},
-        padding: {top: 8, bottom: 8, left: 15, right: 15},
-        margin: {right: 10, bottom: 10},
+        padding: {top: 8, bottom: 8, left: 16, right: 16},
+        margin: {right: 8, bottom: 8},
         draw_bg: {
-            color: #x4ECDC4,
-            radius: 16.0,
+            color: #0079BF,  // 蓝色背景
+            radius: 12.0,
         }
 
         // 标签文本
@@ -24,22 +24,23 @@ live_design! {
             height: Fit,
             text: "标签",
             draw_text: {
-                color: #FFFFFF,
-                text_style: <THEME_FONT_REGULAR>{font_size: 15}
+                color: #FFFFFF,  // 白色文字
+                text_style: <THEME_FONT_REGULAR>{font_size: 14}
             }
         }
 
         // 删除按钮
         remove_btn = <Button> {
-            width: 24,
-            height: 24,
-            margin: {left: 5},
+            width: 22,
+            height: 22,
+            margin: {left: 6},
             text: "×",
             draw_bg: {
-                color: #00000000,
+                color: #00000000,  // 透明背景
+                radius: 11.0,
             }
             draw_text: {
-                color: #FFFFFF,
+                color: #FFFFFF,  // 白色 X
                 text_style: <THEME_FONT_BOLD>{font_size: 20}
             }
         }
@@ -72,21 +73,23 @@ live_design! {
         }
 
         // 标签列表容器
-        <View> {
+        tags_container = <View> {
             width: Fill,
             height: Fit,
             flow: Down,
             spacing: 5,
             
-            // 标签列表
-            tag_list = <PortalList> {
+            // 标签显示区域（临时使用 Label 显示）
+            tags_display_label = <Label> {
                 width: Fill,
                 height: Fit,
-                flow: RightWrap,
-                spacing: 5,
-                padding: {top: 5, bottom: 5},
-
-                TagItem = <TagItem> {}
+                text: "",
+                visible: false,
+                draw_text: {
+                    color: #0079BF,
+                    text_style: <THEME_FONT_REGULAR>{font_size: 14}
+                    wrap: Word
+                }
             }
 
             // 空状态提示
@@ -95,7 +98,7 @@ live_design! {
                 height: Fit,
                 padding: {top: 10, bottom: 10},
                 text: "暂无标签",
-                visible: false,
+                visible: true,
                 draw_text: {
                     color: #x95A5A6,
                     text_style: <THEME_FONT_REGULAR>{font_size: 13}
@@ -284,67 +287,42 @@ impl Widget for TagSection {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 AppState 获取 selected_card_id
-        let tags: Vec<String> = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+        // 从 AppState 获取 selected_card_id 和 tags
+        let (tags, _card_id) = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
             if let Some(selected_card_id) = &app_state.kanban_state.selected_card_id {
                 self.card_id = Some(selected_card_id.clone());
                 
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
                     log!("🏷️ TagSection draw_walk: card_id={}, tags={:?}", selected_card_id, card.tags);
-                    card.tags.clone()
+                    (card.tags.clone(), Some(selected_card_id.clone()))
                 } else {
                     log!("⚠️ TagSection: Card not found in state!");
-                    Vec::new()
+                    (Vec::new(), None)
                 }
             } else {
                 log!("⚠️ TagSection: No selected_card_id!");
-                Vec::new()
+                (Vec::new(), None)
             }
         } else {
             log!("⚠️ TagSection: No AppState in scope!");
-            Vec::new()
+            (Vec::new(), None)
         };
 
         log!("🏷️ TagSection: Rendering {} tags", tags.len());
-
-        while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
-            if let Some(mut list) = item.as_portal_list().borrow_mut() {
-                list.set_item_range(cx, 0, tags.len());
-
-                while let Some(tag_idx) = list.next_visible_item(cx) {
-                    if tag_idx >= tags.len() {
-                        continue;
-                    }
-
-                    let tag_item_widget = list.item(cx, tag_idx, live_id!(TagItem));
-                    let tag = &tags[tag_idx];
-                    
-                    log!("🏷️ TagSection: Rendering tag #{}: '{}'", tag_idx, tag);
-                    
-                    // 设置标签文本
-                    tag_item_widget.label(ids!(tag_text)).set_text(cx, tag);
-                    
-                    // 传递 tag_text 和 card_id 给 TagItem
-                    let tag_item_ref = tag_item_widget.as_tag_item();
-                    if let Some(mut tag_item) = tag_item_ref.borrow_mut() {
-                        tag_item.tag_text = tag.clone();
-                        tag_item.card_id = self.card_id.clone();
-                    }
-                    
-                    tag_item_widget.draw_all(cx, &mut Scope::empty());
-                }
-            }
-        }
         
-        // 在 draw_walk 之后设置可见性
+        // 设置可见性和内容
         if tags.is_empty() {
-            log!("🏷️ TagSection: Showing empty_label");
+            self.view.label(ids!(tags_display_label)).set_visible(cx, false);
             self.view.label(ids!(empty_label)).set_visible(cx, true);
         } else {
-            log!("🏷️ TagSection: Hiding empty_label, showing {} tags", tags.len());
+            // 显示标签（临时用逗号分隔的文本）
+            let tags_text = format!("标签: {}", tags.join(", "));
+            log!("🏷️ TagSection: Setting tags text: {}", tags_text);
+            self.view.label(ids!(tags_display_label)).set_text(cx, &tags_text);
+            self.view.label(ids!(tags_display_label)).set_visible(cx, true);
             self.view.label(ids!(empty_label)).set_visible(cx, false);
         }
-        
-        DrawStep::done()
+
+        self.view.draw_walk(cx, scope, walk)
     }
 }

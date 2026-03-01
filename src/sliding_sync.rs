@@ -542,6 +542,11 @@ pub enum MatrixRequest {
     CreateKanbanList {
         name: String,
     },
+    /// Request to update a kanban list name (Matrix space name).
+    UpdateKanbanListName {
+        list_id: OwnedRoomId,
+        name: String,
+    },
     /// Request to create a new kanban card (Matrix room in a space).
     CreateKanbanCard {
         space_id: OwnedRoomId,
@@ -1882,6 +1887,39 @@ async fn matrix_worker_task(
                             error!("Failed to create kanban list: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to create list: {e}")));
                             Cx::post_action(KanbanActions::Loading(false));
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+
+            MatrixRequest::UpdateKanbanListName { list_id, name } => {
+                let Some(client) = get_client() else {
+                    error!("Cannot update kanban list name: Matrix client not available");
+                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    continue;
+                };
+
+                let _update_list_name_task = Handle::current().spawn(async move {
+                    log!("Updating kanban list name: {} -> {}", list_id, name);
+                    
+                    // 获取 Space (Room)
+                    let Some(room) = client.get_room(&list_id) else {
+                        error!("Cannot find room for list_id: {}", list_id);
+                        Cx::post_action(KanbanActions::Error(format!("List not found: {}", list_id)));
+                        return;
+                    };
+                    
+                    // 更新 Space 名称
+                    match room.set_name(name.clone()).await {
+                        Ok(_) => {
+                            log!("✅ Successfully updated list name on Matrix server: {} -> {}", list_id, name);
+                            // 注意：不需要发送额外的 action，因为本地状态已经在 UpdateListName 中更新了
+                            // Matrix 的 space service 同步会在后台进行，但我们的本地状态已经是最新的
+                        }
+                        Err(e) => {
+                            error!("Failed to update list name: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to update list name: {e}")));
                         }
                     }
                     SignalToUI::set_ui_signal();

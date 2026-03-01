@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use matrix_sdk::ruma::OwnedRoomId;
 use serde::{Deserialize, Serialize};
+use makepad_widgets::log;
 
 /// 简化的看板列表（对应 Matrix Space）
 #[derive(Debug, Clone)]
@@ -251,7 +252,34 @@ impl KanbanAppState {
 
     /// 添加或更新列表
     pub fn upsert_list(&mut self, list: KanbanList) {
-        self.lists.insert(list.id.clone(), list);
+        // 如果列表已存在，保留现有的卡片 ID 和可能更新的名称
+        if let Some(existing_list) = self.lists.get(&list.id) {
+            let mut updated_list = list;
+            
+            // 如果新列表的卡片为空，保留现有卡片
+            if updated_list.card_ids.is_empty() && !existing_list.card_ids.is_empty() {
+                updated_list.card_ids = existing_list.card_ids.clone();
+            }
+            
+            // 如果新列表名称是"新列表"（默认值），但现有列表有不同的名称，
+            // 则保留现有名称（可能是用户刚刚编辑的）
+            if updated_list.name == "新列表" && existing_list.name != "新列表" {
+                log!("🔄 upsert_list: 保留现有列表名称 '{}' 而不是使用默认值 '新列表'", existing_list.name);
+                updated_list.name = existing_list.name.clone();
+            }
+            
+            self.lists.insert(updated_list.id.clone(), updated_list);
+        } else {
+            // 新列表，直接插入
+            self.lists.insert(list.id.clone(), list);
+        }
+    }
+
+    /// 只更新列表名称，保留现有卡片
+    pub fn update_list_name(&mut self, list_id: &OwnedRoomId, new_name: String) {
+        if let Some(list) = self.lists.get_mut(list_id) {
+            list.name = new_name;
+        }
     }
 
     /// 添加或更新卡片

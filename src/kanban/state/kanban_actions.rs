@@ -18,6 +18,18 @@ pub enum KanbanActions {
         name: String,
     },
     
+    /// 更新列表名称
+    UpdateListName {
+        list_id: OwnedRoomId,
+        name: String,
+    },
+    
+    /// 显示编辑列表名称模态框
+    ShowEditListName {
+        list_id: OwnedRoomId,
+        current_name: String,
+    },
+    
     /// 创建新卡片（Room）
     CreateCard {
         space_id: OwnedRoomId,
