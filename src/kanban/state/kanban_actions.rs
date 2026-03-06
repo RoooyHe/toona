@@ -30,6 +30,9 @@ pub enum KanbanActions {
         current_name: String,
     },
     
+    /// 关闭编辑列表名称模态框
+    CloseEditListNameModal,
+    
     /// 创建新卡片（Room）
     CreateCard {
         space_id: OwnedRoomId,

@@ -104,7 +104,9 @@ impl Widget for EditListNameModal {
         if let Event::Actions(actions) = event {
             // 处理保存按钮
             if self.view.button(ids!(save_button)).clicked(actions) {
+                log!("EditListNameModal: 保存按钮被点击");
                 let text = self.view.text_input(ids!(list_name_input)).text();
+                log!("EditListNameModal: 输入框文本: '{}'", text);
                 
                 if !text.trim().is_empty() {
                     if let Some(list_id) = &self.list_id {
@@ -113,17 +115,27 @@ impl Widget for EditListNameModal {
                             list_id: list_id.clone(),
                             name: text.trim().to_string(),
                         });
+                        
+                        // 关闭模态框
+                        log!("EditListNameModal: 关闭模态框");
+                        cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
+                    } else {
+                        log!("⚠️ EditListNameModal: list_id 为 None");
                     }
+                } else {
+                    log!("⚠️ EditListNameModal: 输入框为空");
                 }
             }
             
             // 处理取消按钮
             if self.view.button(ids!(cancel_button)).clicked(actions) {
                 log!("EditListNameModal: 取消编辑");
+                cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
             }
             
             // 处理回车键
             if let Some((text, _)) = self.view.text_input(ids!(list_name_input)).returned(actions) {
+                log!("EditListNameModal: 回车键被按下，文本: '{}'", text);
                 if !text.trim().is_empty() {
                     if let Some(list_id) = &self.list_id {
                         log!("EditListNameModal: 回车保存列表名称 '{}' (列表ID: {})", text.trim(), list_id);
@@ -131,6 +143,10 @@ impl Widget for EditListNameModal {
                             list_id: list_id.clone(),
                             name: text.trim().to_string(),
                         });
+                        
+                        // 关闭模态框
+                        log!("EditListNameModal: 关闭模态框");
+                        cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
                     }
                 }
             }

@@ -547,6 +547,12 @@ pub enum MatrixRequest {
         list_id: OwnedRoomId,
         name: String,
     },
+    
+    /// Request to update a kanban card title (Matrix room name).
+    UpdateKanbanCardTitle {
+        card_id: OwnedRoomId,
+        title: String,
+    },
     /// Request to create a new kanban card (Matrix room in a space).
     CreateKanbanCard {
         space_id: OwnedRoomId,
@@ -1920,6 +1926,38 @@ async fn matrix_worker_task(
                         Err(e) => {
                             error!("Failed to update list name: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to update list name: {e}")));
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+
+            MatrixRequest::UpdateKanbanCardTitle { card_id, title } => {
+                let Some(client) = get_client() else {
+                    error!("Cannot update kanban card title: Matrix client not available");
+                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    continue;
+                };
+
+                let _update_card_title_task = Handle::current().spawn(async move {
+                    log!("Updating kanban card title: {} -> {}", card_id, title);
+                    
+                    // 获取 Card (Room)
+                    let Some(room) = client.get_room(&card_id) else {
+                        error!("Cannot find room for card_id: {}", card_id);
+                        Cx::post_action(KanbanActions::Error(format!("Card not found: {}", card_id)));
+                        return;
+                    };
+                    
+                    // 更新 Card 标题（Room 名称）
+                    match room.set_name(title.clone()).await {
+                        Ok(_) => {
+                            log!("✅ Successfully updated card title on Matrix server: {} -> {}", card_id, title);
+                            // 本地状态已经在 UpdateCardTitle 中更新了
+                        }
+                        Err(e) => {
+                            error!("Failed to update card title: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to update card title: {e}")));
                         }
                     }
                     SignalToUI::set_ui_signal();

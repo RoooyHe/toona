@@ -838,6 +838,12 @@ impl App {
                 // 打开模态框
                 self.ui.modal(ids!(edit_list_name_modal)).open(cx);
             }
+            
+            KanbanActions::CloseEditListNameModal => {
+                // 关闭编辑列表名称模态框
+                log!("CloseEditListNameModal: 关闭模态框");
+                self.ui.modal(ids!(edit_list_name_modal)).close(cx);
+            }
 
             KanbanActions::CreateCard { space_id, title } => {
                 // 在列表中创建新卡片
@@ -917,9 +923,19 @@ impl App {
                 log!("UpdateCardTitle: card_id='{}', title='{}'", card_id, title);
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.title = title.clone();
+                    card.touch(); // 更新 updated_at 时间戳
+                    log!("✅ UpdateCardTitle: 本地状态已更新，卡片标题改为 '{}'", title);
+                    
+                    // 同步到 Matrix 服务器
+                    if get_client().is_some() {
+                        submit_async_request(MatrixRequest::UpdateKanbanCardTitle {
+                            card_id,
+                            title,
+                        });
+                    }
+                    
                     self.ui.redraw(cx);
                 }
-                // TODO: 同步到 Matrix 服务器
             }
 
             KanbanActions::UpdateCardDescription {
