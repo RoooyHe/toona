@@ -79,12 +79,10 @@ impl Widget for CardList {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
         
-        // 处理新卡片输入框的事件
         if let Event::Actions(actions) = event {
-            // 处理新卡片输入框文本变化事件（用于实时更新状态）
+            // 处理新卡片输入框的事件
             if let Some(_text) = self.view.text_input(ids!(new_card_text_input)).changed(actions) {
                 // TODO: 实现新卡片输入状态管理
-                // let state = scope.data.get_mut::<KanbanAppState>().unwrap();
             }
             
             // 处理回车键创建新卡片
@@ -92,7 +90,6 @@ impl Widget for CardList {
                 if !text.trim().is_empty() {
                     println!("新卡片输入框回车，创建卡片: '{}'", text.trim());
                     // TODO: 触发创建卡片的 Action
-                    // cx.widget_action(widget_uid, &scope.path, KanbanAction::CreateCard(...));
                     self.view.text_input(ids!(new_card_text_input)).set_text(cx, "");
                 }
             }
@@ -128,10 +125,20 @@ impl Widget for CardList {
 
                     let card_item = list.item(cx, card_idx, live_id!(Card));
                     let card = &cards[card_idx];
+                    let card_id = card.id.clone();
                     
-                    // 设置卡片标题
+                    // 先传递 card_id 并绘制，这样 CardItem 的状态会被保留
+                    if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
+                        let mut card_scope = Scope::with_data_props(app_state, &card_id);
+                        card_item.draw_all(cx, &mut card_scope);
+                    }
+                    
+                    // 然后再设置文本（只有在非编辑状态时才会生效）
+                    // 注意：这里我们需要检查 CardItem 是否在编辑状态
+                    // 但是我们无法直接访问 CardItem 的内部状态
+                    // 所以我们总是设置，让 CardItem 自己决定是否接受
                     card_item
-                        .text_input(ids!(card_title_input))
+                        .label(ids!(card_title_label))
                         .set_text(cx, &card.title);
 
                     // 设置标签信息（显示描述或"无描述"）
@@ -147,13 +154,6 @@ impl Widget for CardList {
                     card_item
                         .label(ids!(card_tags))
                         .set_text(cx, &tags_text);
-
-                    // 传递 card_id (OwnedRoomId) 给 CardItem
-                    let card_id = card.id.clone();
-                    if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
-                        let mut card_scope = Scope::with_data_props(app_state, &card_id);
-                        card_item.draw_all(cx, &mut card_scope);
-                    }
                 }
             }
         }

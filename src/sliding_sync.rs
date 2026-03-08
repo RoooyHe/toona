@@ -552,6 +552,14 @@ pub enum MatrixRequest {
     UpdateKanbanCardTitle {
         card_id: OwnedRoomId,
         title: String,
+        card: crate::kanban::state::kanban_state::KanbanCard,
+    },
+    
+    /// Request to update a kanban card description.
+    UpdateKanbanCardDescription {
+        card_id: OwnedRoomId,
+        description: Option<String>,
+        card: crate::kanban::state::kanban_state::KanbanCard,
     },
     /// Request to create a new kanban card (Matrix room in a space).
     CreateKanbanCard {
@@ -1907,6 +1915,8 @@ async fn matrix_worker_task(
                 };
 
                 let _update_list_name_task = Handle::current().spawn(async move {
+                    use matrix_sdk::ruma::events::room::topic::RoomTopicEventContent;
+                    
                     log!("Updating kanban list name: {} -> {}", list_id, name);
                     
                     // 获取 Space (Room)
@@ -1916,15 +1926,22 @@ async fn matrix_worker_task(
                         return;
                     };
                     
-                    // 更新 Space 名称
-                    match room.set_name(name.clone()).await {
+                    // 更新 Space 的 topic（包含 [kanban-list] 标记）
+                    // 因为加载时是从 topic 读取名称的，所以必须更新 topic
+                    let topic_with_marker = format!("[kanban-list] {}", name);
+                    let topic_content = RoomTopicEventContent::new(topic_with_marker.clone());
+                    
+                    match room.send_state_event(topic_content).await {
                         Ok(_) => {
-                            log!("✅ Successfully updated list name on Matrix server: {} -> {}", list_id, name);
-                            // 注意：不需要发送额外的 action，因为本地状态已经在 UpdateListName 中更新了
-                            // Matrix 的 space service 同步会在后台进行，但我们的本地状态已经是最新的
+                            log!("✅ Successfully updated list topic on Matrix server: {} -> {}", list_id, topic_with_marker);
+                            
+                            // 同时更新 room name 以保持一致性
+                            if let Err(e) = room.set_name(name.clone()).await {
+                                log!("⚠️ Warning: Failed to update room name: {e:?}");
+                            }
                         }
                         Err(e) => {
-                            error!("Failed to update list name: {e:?}");
+                            error!("Failed to update list topic: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to update list name: {e}")));
                         }
                     }
@@ -1932,7 +1949,7 @@ async fn matrix_worker_task(
                 });
             }
 
-            MatrixRequest::UpdateKanbanCardTitle { card_id, title } => {
+            MatrixRequest::UpdateKanbanCardTitle { card_id, title, card } => {
                 let Some(client) = get_client() else {
                     error!("Cannot update kanban card title: Matrix client not available");
                     Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
@@ -1952,14 +1969,48 @@ async fn matrix_worker_task(
                     // 更新 Card 标题（Room 名称）
                     match room.set_name(title.clone()).await {
                         Ok(_) => {
-                            log!("✅ Successfully updated card title on Matrix server: {} -> {}", card_id, title);
-                            // 本地状态已经在 UpdateCardTitle 中更新了
+                            log!("✅ Successfully updated card room name on Matrix server: {} -> {}", card_id, title);
                         }
                         Err(e) => {
-                            error!("Failed to update card title: {e:?}");
+                            error!("Failed to update card room name: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to update card title: {e}")));
+                            return;
                         }
                     }
+                    
+                    // 同时更新元数据中的标题，确保重启后不会丢失
+                    if let Err(e) = crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
+                        .save_card_metadata(&card).await 
+                    {
+                        error!("Failed to save card metadata after title update: {e:?}");
+                    } else {
+                        log!("✅ Successfully saved card metadata with new title");
+                    }
+                    
+                    SignalToUI::set_ui_signal();
+                });
+            }
+
+            MatrixRequest::UpdateKanbanCardDescription { card_id, description, card } => {
+                let Some(client) = get_client() else {
+                    error!("Cannot update kanban card description: Matrix client not available");
+                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    continue;
+                };
+
+                let _update_card_description_task = Handle::current().spawn(async move {
+                    log!("Updating kanban card description: {} -> {:?}", card_id, description);
+                    
+                    // 保存元数据（包括更新后的描述）
+                    if let Err(e) = crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
+                        .save_card_metadata(&card).await 
+                    {
+                        error!("Failed to save card metadata after description update: {e:?}");
+                        Cx::post_action(KanbanActions::Error(format!("Failed to update card description: {e}")));
+                    } else {
+                        log!("✅ Successfully saved card metadata with new description");
+                    }
+                    
                     SignalToUI::set_ui_signal();
                 });
             }

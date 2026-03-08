@@ -21,6 +21,7 @@ use crate::{
         KanbanActions, KanbanAppState,
     },
     kanban::components::edit_list_name_modal::EditListNameModalWidgetRefExt,
+    kanban::components::card_modal::CardDetailModalWidgetRefExt,
     login::login_screen::LoginAction,
     logout::logout_confirm_modal::{
         LogoutAction, LogoutConfirmModalAction, LogoutConfirmModalWidgetRefExt,
@@ -544,8 +545,8 @@ impl MatchEvent for App {
             }
 
             // Handle card detail modal close button
-            if self.ui.button(ids!(card_detail_modal.content.modal_header.close_button)).clicked(actions) {
-                self.ui.modal(ids!(card_detail_modal)).close(cx);
+            if self.ui.button(ids!(card_detail_modal.modal.content.modal_header.close_button)).clicked(actions) {
+                self.ui.card_detail_modal(ids!(card_detail_modal)).close(cx);
                 continue;
             }
 
@@ -791,7 +792,7 @@ impl App {
                 if state.selected_card_id.as_ref() == Some(&card_id) {
                     log!("🔄 Forcing modal redraw for updated card {}", card_id);
                     // 强制重绘模态框内容
-                    self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                    self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                 }
                 
                 self.ui.redraw(cx);
@@ -886,7 +887,7 @@ impl App {
                 state.selected_card_id = Some(card_id);
                 
                 // 打开卡片详情模态框
-                self.ui.modal(ids!(card_detail_modal)).open(cx);
+                self.ui.card_detail_modal(ids!(card_detail_modal)).open(cx);
                 
                 self.ui.redraw(cx);
             }
@@ -926,11 +927,13 @@ impl App {
                     card.touch(); // 更新 updated_at 时间戳
                     log!("✅ UpdateCardTitle: 本地状态已更新，卡片标题改为 '{}'", title);
                     
-                    // 同步到 Matrix 服务器
+                    // 同步到 Matrix 服务器（传递完整的卡片数据以便保存元数据）
                     if get_client().is_some() {
+                        let card_clone = card.clone();
                         submit_async_request(MatrixRequest::UpdateKanbanCardTitle {
                             card_id,
                             title,
+                            card: card_clone,
                         });
                     }
                     
@@ -946,9 +949,21 @@ impl App {
                 log!("UpdateCardDescription: card_id='{}', description='{:?}'", card_id, description);
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.description = description.clone();
+                    card.touch(); // 更新 updated_at 时间戳
+                    log!("✅ UpdateCardDescription: 本地状态已更新");
+                    
+                    // 同步到 Matrix 服务器（传递完整的卡片数据以便保存元数据）
+                    if get_client().is_some() {
+                        let card_clone = card.clone();
+                        submit_async_request(MatrixRequest::UpdateKanbanCardDescription {
+                            card_id,
+                            description,
+                            card: card_clone,
+                        });
+                    }
+                    
                     self.ui.redraw(cx);
                 }
-                // TODO: 同步到 Matrix 服务器
             }
 
             KanbanActions::DeleteCard { card_id } => {
@@ -979,7 +994,7 @@ impl App {
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
                     
@@ -1007,7 +1022,7 @@ impl App {
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                         }
                         self.ui.redraw(cx);
                         
@@ -1036,7 +1051,7 @@ impl App {
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                         }
                         self.ui.redraw(cx);
                         
@@ -1064,7 +1079,7 @@ impl App {
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
                     
@@ -1094,7 +1109,7 @@ impl App {
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                         }
                         self.ui.redraw(cx);
                         
@@ -1119,7 +1134,7 @@ impl App {
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
                     
@@ -1145,7 +1160,7 @@ impl App {
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
                     
@@ -1169,7 +1184,7 @@ impl App {
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.content)).redraw(cx);
+                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
                     }
                     self.ui.redraw(cx);
                     
@@ -1331,3 +1346,4 @@ pub enum AppStateAction {
     },
     None,
 }
+

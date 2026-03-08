@@ -3,9 +3,14 @@ use makepad_widgets::*;
 live_design! {
     use link::theme::*;
     use link::widgets::*;
+    use crate::shared::styles::*;
 
     // 卡片基本信息区域（标题、描述、状态）
-    pub CardInfoSection = <View> {
+    pub CardInfoSection = {{CardInfoSection}} {
+        width: Fill,
+        height: Fit,
+        flow: Down,
+        spacing: 15,
         width: Fill,
         height: Fit,
         flow: Down,
@@ -74,22 +79,10 @@ live_design! {
                 spacing: 5,
                 visible: false,
 
-                card_title_input = <TextInput> {
+                card_title_input = <SimpleTextInput> {
                     width: Fill,
                     height: 40,
                     text: "",
-                    draw_text: {
-                        color: #333333
-                        text_style: {
-                            font_size: 16.0
-                        }
-                    }
-                    draw_bg: {
-                        color: #F8F9FA
-                    }
-                    draw_cursor: {
-                        color: #333333
-                    }
                 }
 
                 <View> {
@@ -194,22 +187,10 @@ live_design! {
                 spacing: 5,
                 visible: false,
 
-                card_description_input = <TextInput> {
+                card_description_input = <SimpleTextInput> {
                     width: Fill,
                     height: 80,
                     text: "",
-                    draw_text: {
-                        color: #333333
-                        text_style: {
-                            font_size: 14.0
-                        }
-                    }
-                    draw_bg: {
-                        color: #F8F9FA
-                    }
-                    draw_cursor: {
-                        color: #333333
-                    }
                 }
 
                 <View> {
@@ -302,6 +283,8 @@ impl Widget for CardInfoSection {
         self.view.handle_event(cx, event, scope);
         
         if let Event::Actions(actions) = event {
+            log!("CardInfoSection: Received actions, card_id: {:?}", self.card_id);
+            
             // 处理标题编辑按钮
             if self.view.button(ids!(edit_title_button)).clicked(actions) {
                 log!("CardInfoSection: 点击编辑标题按钮");
@@ -315,6 +298,9 @@ impl Widget for CardInfoSection {
                 self.view.view(ids!(title_edit_container)).set_visible(cx, true);
                 self.view.label(ids!(card_title_label)).set_visible(cx, false);
                 self.view.button(ids!(edit_title_button)).set_visible(cx, false);
+                
+                // 设置焦点到输入框
+                self.view.text_input(ids!(card_title_input)).set_key_focus(cx);
                 
                 self.view.redraw(cx);
             }
@@ -373,6 +359,9 @@ impl Widget for CardInfoSection {
                 self.view.label(ids!(card_description_label)).set_visible(cx, false);
                 self.view.button(ids!(edit_description_button)).set_visible(cx, false);
                 
+                // 设置焦点到输入框
+                self.view.text_input(ids!(card_description_input)).set_key_focus(cx);
+                
                 self.view.redraw(cx);
             }
             
@@ -424,9 +413,32 @@ impl Widget for CardInfoSection {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 scope 获取卡片数据
-        if let Some(card_id) = scope.data.get::<matrix_sdk::ruma::OwnedRoomId>() {
-            self.card_id = Some(card_id.clone());
+        // 从 AppState 获取 selected_card_id
+        if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+            if let Some(card_id) = &app_state.kanban_state.selected_card_id {
+                // 只在 card_id 改变时更新
+                let should_update = self.card_id.as_ref() != Some(card_id);
+                
+                if should_update {
+                    self.card_id = Some(card_id.clone());
+                    log!("CardInfoSection: Got card_id from AppState: {}", card_id);
+                    
+                    // 从 AppState 获取卡片数据并更新显示
+                    if let Some(card) = app_state.kanban_state.cards.get(card_id) {
+                        log!("CardInfoSection: Found card data, title: {}", card.title);
+                        self.view.label(ids!(card_title_label)).set_text(cx, &card.title);
+                        
+                        let desc_text = card.description.as_deref().unwrap_or("暂无描述");
+                        self.view.label(ids!(card_description_label)).set_text(cx, desc_text);
+                    } else {
+                        log!("CardInfoSection: Card not found in AppState");
+                    }
+                }
+            } else {
+                log!("CardInfoSection: No selected_card_id in AppState");
+            }
+        } else {
+            log!("CardInfoSection: No AppState in scope");
         }
         
         self.view.draw_walk(cx, scope, walk)

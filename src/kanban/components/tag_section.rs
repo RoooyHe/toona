@@ -293,22 +293,16 @@ impl Widget for TagSection {
                 self.card_id = Some(selected_card_id.clone());
                 
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
-                    log!("🏷️ TagSection draw_walk: card_id={}, tags={:?}", selected_card_id, card.tags);
                     (card.tags.clone(), Some(selected_card_id.clone()))
                 } else {
-                    log!("⚠️ TagSection: Card not found in state!");
                     (Vec::new(), None)
                 }
             } else {
-                log!("⚠️ TagSection: No selected_card_id!");
                 (Vec::new(), None)
             }
         } else {
-            log!("⚠️ TagSection: No AppState in scope!");
             (Vec::new(), None)
         };
-
-        log!("🏷️ TagSection: Rendering {} tags", tags.len());
         
         // 设置可见性和内容
         if tags.is_empty() {
@@ -317,7 +311,6 @@ impl Widget for TagSection {
         } else {
             // 显示标签（临时用逗号分隔的文本）
             let tags_text = format!("标签: {}", tags.join(", "));
-            log!("🏷️ TagSection: Setting tags text: {}", tags_text);
             self.view.label(ids!(tags_display_label)).set_text(cx, &tags_text);
             self.view.label(ids!(tags_display_label)).set_visible(cx, true);
             self.view.label(ids!(empty_label)).set_visible(cx, false);
