@@ -251,14 +251,70 @@ live_design! {
                 }
             }
 
-            card_status = <Label> {
+            <View> {
                 width: Fill,
                 height: Fit,
-                text: "进行中"
-                draw_text: {
-                    color: #333333
-                    text_style: {
-                        font_size: 14.0
+                flow: Right,
+                spacing: 10,
+                align: {y: 0.5}
+
+                card_status_label = <Label> {
+                    width: Fit,
+                    height: Fit,
+                    text: "未完成"
+                    draw_text: {
+                        color: #333333
+                        text_style: {
+                            font_size: 14.0
+                        }
+                    }
+                }
+
+                status_pending_btn = <Button> {
+                    width: 70,
+                    height: 28,
+                    text: "未完成"
+                    draw_bg: {
+                        color: #FFA500
+                        radius: 3.0
+                    }
+                    draw_text: {
+                        color: #FFFFFF
+                        text_style: {
+                            font_size: 12.0
+                        }
+                    }
+                }
+
+                status_completed_btn = <Button> {
+                    width: 70,
+                    height: 28,
+                    text: "已完成"
+                    draw_bg: {
+                        color: #61BD4F
+                        radius: 3.0
+                    }
+                    draw_text: {
+                        color: #FFFFFF
+                        text_style: {
+                            font_size: 12.0
+                        }
+                    }
+                }
+
+                status_archived_btn = <Button> {
+                    width: 70,
+                    height: 28,
+                    text: "已归档"
+                    draw_bg: {
+                        color: #95A5A6
+                        radius: 3.0
+                    }
+                    draw_text: {
+                        color: #FFFFFF
+                        text_style: {
+                            font_size: 12.0
+                        }
                     }
                 }
             }
@@ -283,11 +339,8 @@ impl Widget for CardInfoSection {
         self.view.handle_event(cx, event, scope);
         
         if let Event::Actions(actions) = event {
-            log!("CardInfoSection: Received actions, card_id: {:?}", self.card_id);
-            
             // 处理标题编辑按钮
             if self.view.button(ids!(edit_title_button)).clicked(actions) {
-                log!("CardInfoSection: 点击编辑标题按钮");
                 self.is_editing_title = true;
                 
                 // 获取当前标题并设置到输入框
@@ -307,12 +360,10 @@ impl Widget for CardInfoSection {
             
             // 处理标题保存按钮
             if self.view.button(ids!(save_title_button)).clicked(actions) {
-                log!("CardInfoSection: 点击保存标题按钮");
                 let new_title = self.view.text_input(ids!(card_title_input)).text();
                 
                 if !new_title.trim().is_empty() {
                     if let Some(card_id) = &self.card_id {
-                        log!("CardInfoSection: 保存新标题 '{}' (卡片ID: {})", new_title.trim(), card_id);
                         cx.action(crate::kanban::KanbanActions::UpdateCardTitle {
                             card_id: card_id.clone(),
                             title: new_title.trim().to_string(),
@@ -347,7 +398,6 @@ impl Widget for CardInfoSection {
             
             // 处理描述编辑按钮
             if self.view.button(ids!(edit_description_button)).clicked(actions) {
-                log!("CardInfoSection: 点击编辑描述按钮");
                 self.is_editing_description = true;
                 
                 // 获取当前描述并设置到输入框
@@ -367,7 +417,6 @@ impl Widget for CardInfoSection {
             
             // 处理描述保存按钮
             if self.view.button(ids!(save_description_button)).clicked(actions) {
-                log!("CardInfoSection: 点击保存描述按钮");
                 let new_desc = self.view.text_input(ids!(card_description_input)).text();
                 
                 if let Some(card_id) = &self.card_id {
@@ -377,7 +426,6 @@ impl Widget for CardInfoSection {
                         Some(new_desc.trim().to_string())
                     };
                     
-                    log!("CardInfoSection: 保存新描述 '{:?}' (卡片ID: {})", desc_option, card_id);
                     cx.action(crate::kanban::KanbanActions::UpdateCardDescription {
                         card_id: card_id.clone(),
                         description: desc_option.clone(),
@@ -399,7 +447,6 @@ impl Widget for CardInfoSection {
             
             // 处理描述取消按钮
             if self.view.button(ids!(cancel_description_button)).clicked(actions) {
-                log!("CardInfoSection: 取消编辑描述");
                 self.is_editing_description = false;
                 
                 // 隐藏编辑区域，显示显示区域
@@ -409,6 +456,37 @@ impl Widget for CardInfoSection {
                 
                 self.view.redraw(cx);
             }
+            
+            // 处理状态按钮
+            if self.view.button(ids!(status_pending_btn)).clicked(actions) {
+                if let Some(card_id) = &self.card_id {
+                    log!("CardInfoSection: Status -> Pending");
+                    cx.action(crate::kanban::KanbanActions::UpdateCardStatus {
+                        card_id: card_id.clone(),
+                        status: crate::kanban::state::kanban_state::CardStatus::Pending,
+                    });
+                }
+            }
+            
+            if self.view.button(ids!(status_completed_btn)).clicked(actions) {
+                if let Some(card_id) = &self.card_id {
+                    log!("CardInfoSection: Status -> Completed");
+                    cx.action(crate::kanban::KanbanActions::UpdateCardStatus {
+                        card_id: card_id.clone(),
+                        status: crate::kanban::state::kanban_state::CardStatus::Completed,
+                    });
+                }
+            }
+            
+            if self.view.button(ids!(status_archived_btn)).clicked(actions) {
+                if let Some(card_id) = &self.card_id {
+                    log!("CardInfoSection: Status -> Archived");
+                    cx.action(crate::kanban::KanbanActions::UpdateCardStatus {
+                        card_id: card_id.clone(),
+                        status: crate::kanban::state::kanban_state::CardStatus::Archived,
+                    });
+                }
+            }
         }
     }
 
@@ -416,29 +494,29 @@ impl Widget for CardInfoSection {
         // 从 AppState 获取 selected_card_id
         if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
             if let Some(card_id) = &app_state.kanban_state.selected_card_id {
-                // 只在 card_id 改变时更新
-                let should_update = self.card_id.as_ref() != Some(card_id);
-                
-                if should_update {
+                // 更新 card_id
+                let should_update_card_id = self.card_id.as_ref() != Some(card_id);
+                if should_update_card_id {
                     self.card_id = Some(card_id.clone());
-                    log!("CardInfoSection: Got card_id from AppState: {}", card_id);
+                }
+                
+                // 从 AppState 获取卡片数据并更新显示
+                if let Some(card) = app_state.kanban_state.cards.get(card_id) {
+                    // 总是更新所有字段（不仅仅在 card_id 改变时）
+                    self.view.label(ids!(card_title_label)).set_text(cx, &card.title);
                     
-                    // 从 AppState 获取卡片数据并更新显示
-                    if let Some(card) = app_state.kanban_state.cards.get(card_id) {
-                        log!("CardInfoSection: Found card data, title: {}", card.title);
-                        self.view.label(ids!(card_title_label)).set_text(cx, &card.title);
-                        
-                        let desc_text = card.description.as_deref().unwrap_or("暂无描述");
-                        self.view.label(ids!(card_description_label)).set_text(cx, desc_text);
-                    } else {
-                        log!("CardInfoSection: Card not found in AppState");
+                    let desc_text = card.description.as_deref().unwrap_or("暂无描述");
+                    self.view.label(ids!(card_description_label)).set_text(cx, desc_text);
+                    
+                    // 更新状态显示
+                    let status_display = card.status.display_name();
+                    self.view.label(ids!(card_status_label)).set_text(cx, status_display);
+                    
+                    if should_update_card_id {
+                        log!("CardInfoSection: Got card_id from AppState: {}", card_id);
                     }
                 }
-            } else {
-                log!("CardInfoSection: No selected_card_id in AppState");
             }
-        } else {
-            log!("CardInfoSection: No AppState in scope");
         }
         
         self.view.draw_walk(cx, scope, walk)

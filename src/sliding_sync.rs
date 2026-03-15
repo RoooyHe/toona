@@ -601,6 +601,32 @@ pub enum MatrixRequest {
         card_id: OwnedRoomId,
         limit: Option<usize>,
     },
+    
+    // ========== Space 标签库管理 Requests ==========
+    
+    /// Request to load Space tag library
+    LoadSpaceTags {
+        space_id: OwnedRoomId,
+    },
+    
+    /// Request to create a new tag in Space
+    CreateSpaceTag {
+        space_id: OwnedRoomId,
+        name: String,
+        color: String,
+    },
+    
+    /// Request to update a Space tag
+    UpdateSpaceTag {
+        space_id: OwnedRoomId,
+        tag: crate::kanban::state::kanban_state::SpaceTag,
+    },
+    
+    /// Request to delete a Space tag
+    DeleteSpaceTag {
+        space_id: OwnedRoomId,
+        tag_id: String,
+    },
 }
 
 /// Submits a request to the worker thread to be executed asynchronously.
@@ -1812,11 +1838,31 @@ async fn matrix_worker_task(
                             for space in &spaces {
                                 Cx::post_action(KanbanActions::ListLoaded(space.clone()));
                                 
+                                // 加载 Space 标签库
+                                log!("Loading tags for space {}", space.id);
+                                match adapter.load_space_tags(&space.id).await {
+                                    Ok(tags) => {
+                                        log!("Loaded {} tags for space {}", tags.len(), space.id);
+                                        Cx::post_action(KanbanActions::SpaceTagsLoaded {
+                                            space_id: space.id.clone(),
+                                            tags,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to load tags for space {}: {e:?}", space.id);
+                                    }
+                                }
+                                
                                 // 加载这个 Space 中的所有卡片
                                 log!("Loading {} cards for space {}", space.card_ids.len(), space.id);
                                 for card_id in &space.card_ids {
                                     match adapter.load_card(card_id, space.id.clone()).await {
-                                        Ok(card) => {
+                                        Ok(mut card) => {
+                                            // 自动迁移旧格式标签
+                                            if let Err(e) = adapter.migrate_card_tags(&mut card, &space.id).await {
+                                                error!("Failed to migrate tags for card {}: {e:?}", card_id);
+                                            }
+                                            
                                             log!("Loaded card: {} ({})", card.title, card.id);
                                             Cx::post_action(KanbanActions::CardLoaded(card));
                                         }
@@ -2118,28 +2164,25 @@ async fn matrix_worker_task(
             // ========== Phase 3 & 4: Unified Metadata Save Handler ==========
             
             MatrixRequest::SaveCardMetadata { card } => {
-                log!("💾 MatrixRequest::SaveCardMetadata received! card_id={}, tags={:?}, end_time={:?}", 
-                    card.id, card.tags, card.end_time);
+                log!("💾 SaveCardMetadata: card_id={}, status={:?}, tags={:?}, end_time={:?}", 
+                    card.id, card.status, card.tags, card.end_time);
                 
                 let Some(client) = get_client() else {
-                    error!("❌ Cannot save metadata: Matrix client not available");
+                    error!("❌ SaveCardMetadata: Matrix client not available");
                     continue;
                 };
                 
                 let _save_metadata_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
-                    log!("💾 Task started: Saving metadata for card {}", card.id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
                     
-                    // Save metadata directly (no need to load first)
                     match adapter.save_card_metadata(&card).await {
                         Ok(_) => {
-                            log!("✅ Successfully saved metadata for card {}", card.id);
-                            // No need to post CardLoaded since memory is already updated
+                            log!("✅ SaveCardMetadata: Successfully saved card {}", card.id);
                         }
                         Err(e) => {
-                            error!("❌ Failed to save card metadata: {e:?}");
+                            error!("❌ SaveCardMetadata: Failed to save card {}: {:?}", card.id, e);
                         }
                     }
                     SignalToUI::set_ui_signal();
@@ -2219,6 +2262,161 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("❌ Failed to load activities: {e:?}");
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+            
+            // ========== Space 标签库管理 Request Handlers ==========
+            
+            MatrixRequest::LoadSpaceTags { space_id } => {
+                log!("📚 MatrixRequest::LoadSpaceTags received! space_id={}", space_id);
+                
+                let Some(client) = get_client() else {
+                    error!("❌ Cannot load space tags: Matrix client not available");
+                    continue;
+                };
+                
+                let _load_tags_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    
+                    log!("📚 Task started: Loading tags for space {}", space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
+                    
+                    match adapter.load_space_tags(&space_id).await {
+                        Ok(tags) => {
+                            log!("✅ Successfully loaded {} tags for space {}", tags.len(), space_id);
+                            Cx::post_action(KanbanActions::SpaceTagsLoaded {
+                                space_id,
+                                tags,
+                            });
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to load space tags: {e:?}");
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+            
+            MatrixRequest::CreateSpaceTag { space_id, name, color } => {
+                log!("➕ MatrixRequest::CreateSpaceTag received! space_id={}, name={}, color={}", 
+                    space_id, name, color);
+                
+                let Some(client) = get_client() else {
+                    error!("❌ Cannot create space tag: Matrix client not available");
+                    continue;
+                };
+                
+                let _create_tag_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    use crate::kanban::state::kanban_state::SpaceTag;
+                    
+                    log!("➕ Task started: Creating tag '{}' in space {}", name, space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
+                    
+                    let new_tag = SpaceTag::new(name, color);
+                    
+                    match adapter.add_space_tag(&space_id, new_tag).await {
+                        Ok(_) => {
+                            log!("✅ Successfully created tag in space {}", space_id);
+                            // Reload tags to update UI
+                            match adapter.load_space_tags(&space_id).await {
+                                Ok(tags) => {
+                                    Cx::post_action(KanbanActions::SpaceTagsLoaded {
+                                        space_id,
+                                        tags,
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("⚠️ Failed to reload tags: {e:?}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to create tag: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to create tag: {e}")));
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+            
+            MatrixRequest::UpdateSpaceTag { space_id, tag } => {
+                log!("✏️ MatrixRequest::UpdateSpaceTag received! space_id={}, tag_id={}", 
+                    space_id, tag.id);
+                
+                let Some(client) = get_client() else {
+                    error!("❌ Cannot update space tag: Matrix client not available");
+                    continue;
+                };
+                
+                let _update_tag_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    
+                    log!("✏️ Task started: Updating tag '{}' in space {}", tag.id, space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
+                    
+                    match adapter.update_space_tag(&space_id, tag).await {
+                        Ok(_) => {
+                            log!("✅ Successfully updated tag in space {}", space_id);
+                            // Reload tags to update UI
+                            match adapter.load_space_tags(&space_id).await {
+                                Ok(tags) => {
+                                    Cx::post_action(KanbanActions::SpaceTagsLoaded {
+                                        space_id,
+                                        tags,
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("⚠️ Failed to reload tags: {e:?}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to update tag: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to update tag: {e}")));
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+            
+            MatrixRequest::DeleteSpaceTag { space_id, tag_id } => {
+                log!("🗑️ MatrixRequest::DeleteSpaceTag received! space_id={}, tag_id={}", 
+                    space_id, tag_id);
+                
+                let Some(client) = get_client() else {
+                    error!("❌ Cannot delete space tag: Matrix client not available");
+                    continue;
+                };
+                
+                let _delete_tag_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    
+                    log!("🗑️ Task started: Deleting tag '{}' from space {}", tag_id, space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
+                    
+                    match adapter.delete_space_tag(&space_id, &tag_id).await {
+                        Ok(_) => {
+                            log!("✅ Successfully deleted tag from space {}", space_id);
+                            // Reload tags to update UI
+                            match adapter.load_space_tags(&space_id).await {
+                                Ok(tags) => {
+                                    Cx::post_action(KanbanActions::SpaceTagsLoaded {
+                                        space_id,
+                                        tags,
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("⚠️ Failed to reload tags: {e:?}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to delete tag: {e:?}");
+                            Cx::post_action(KanbanActions::Error(format!("Failed to delete tag: {e}")));
                         }
                     }
                     SignalToUI::set_ui_signal();

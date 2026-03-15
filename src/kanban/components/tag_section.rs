@@ -235,6 +235,10 @@ pub struct TagSection {
     card_id: Option<matrix_sdk::ruma::OwnedRoomId>,
     #[rust]
     is_adding: bool,
+    #[rust]
+    pending_tag_name: Option<String>,  // 待添加的标签名称
+    #[rust]
+    pending_space_id: Option<matrix_sdk::ruma::OwnedRoomId>,  // 待添加标签的 Space ID
 }
 
 impl Widget for TagSection {
@@ -258,11 +262,49 @@ impl Widget for TagSection {
                 
                 if !text.trim().is_empty() {
                     if let Some(card_id) = &self.card_id {
-                        log!("TagSection: 添加标签 '{}' 到卡片 {}", text.trim(), card_id);
-                        cx.action(crate::kanban::KanbanActions::AddTag {
-                            card_id: card_id.clone(),
-                            tag: text.trim().to_string(),
-                        });
+                        // 保存待添加的标签名称
+                        self.pending_tag_name = Some(text.trim().to_string());
+                        
+                        // 获取 Space ID 来查找标签库
+                        if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                            if let Some(card) = app_state.kanban_state.cards.get(card_id) {
+                                let space_id = card.space_id.clone();
+                                let tag_name = text.trim().to_string();
+                                
+                                // 保存 space_id 以便后续使用
+                                self.pending_space_id = Some(space_id.clone());
+                                
+                                // 在 Space 标签库中查找标签
+                                if let Some(space_tags) = app_state.kanban_state.space_tags.get(&space_id) {
+                                    // 查找是否已存在同名标签
+                                    if let Some(existing_tag) = space_tags.iter().find(|t| t.name == tag_name) {
+                                        log!("TagSection: 添加已存在的标签 '{}' (ID: {}) 到卡片 {}", 
+                                            existing_tag.name, existing_tag.id, card_id);
+                                        cx.action(crate::kanban::KanbanActions::AddTagToCard {
+                                            card_id: card_id.clone(),
+                                            tag_id: existing_tag.id.clone(),
+                                        });
+                                        self.pending_tag_name = None;
+                                        self.pending_space_id = None;
+                                    } else {
+                                        // 创建新标签
+                                        log!("TagSection: 创建新标签 '{}' 并添加到卡片 {}", tag_name, card_id);
+                                        cx.action(crate::kanban::KanbanActions::CreateSpaceTag {
+                                            space_id: space_id.clone(),
+                                            name: tag_name,
+                                            color: "#0079BF".to_string(),
+                                        });
+                                    }
+                                } else {
+                                    log!("TagSection: 标签库未加载,创建新标签");
+                                    cx.action(crate::kanban::KanbanActions::CreateSpaceTag {
+                                        space_id: space_id.clone(),
+                                        name: tag_name,
+                                        color: "#0079BF".to_string(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -287,30 +329,69 @@ impl Widget for TagSection {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        // 从 AppState 获取 selected_card_id 和 tags
-        let (tags, _card_id) = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+        // 从 AppState 获取标签信息
+        let tag_names: Vec<String> = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
             if let Some(selected_card_id) = &app_state.kanban_state.selected_card_id {
                 self.card_id = Some(selected_card_id.clone());
                 
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
-                    (card.tags.clone(), Some(selected_card_id.clone()))
+                    let space_id = &card.space_id;
+                    let tag_ids = &card.tags;
+                    
+                    // 检查是否有待添加的标签（创建新标签后自动添加）
+                    if let (Some(pending_name), Some(pending_space)) = (&self.pending_tag_name, &self.pending_space_id) {
+                        if pending_space == space_id {
+                            // 在刚加载的标签库中查找新创建的标签
+                            if let Some(space_tags) = app_state.kanban_state.space_tags.get(space_id) {
+                                if let Some(new_tag) = space_tags.iter().find(|t| &t.name == pending_name) {
+                                    log!("TagSection: Auto-adding newly created tag '{}' to card", new_tag.name);
+                                    cx.action(crate::kanban::KanbanActions::AddTagToCard {
+                                        card_id: selected_card_id.clone(),
+                                        tag_id: new_tag.id.clone(),
+                                    });
+                                    self.pending_tag_name = None;
+                                    self.pending_space_id = None;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 根据 tag_id 查找标签名称
+                    if let Some(space_tags) = app_state.kanban_state.space_tags.get(space_id) {
+                        if space_tags.is_empty() && !tag_ids.is_empty() {
+                            // 如果 space_tags 为空但卡片有标签，显示标签 ID 作为降级处理
+                            tag_ids.clone()
+                        } else {
+                            tag_ids.iter()
+                                .filter_map(|tag_id| {
+                                    space_tags.iter()
+                                        .find(|t| &t.id == tag_id)
+                                        .map(|t| t.name.clone())
+                                })
+                                .collect()
+                        }
+                    } else {
+                        // 如果没有加载标签库，直接显示 ID（降级处理）
+                        log!("TagSection: space_tags not loaded for space {}, showing tag IDs", space_id);
+                        tag_ids.clone()
+                    }
                 } else {
-                    (Vec::new(), None)
+                    Vec::new()
                 }
             } else {
-                (Vec::new(), None)
+                Vec::new()
             }
         } else {
-            (Vec::new(), None)
+            Vec::new()
         };
         
         // 设置可见性和内容
-        if tags.is_empty() {
+        if tag_names.is_empty() {
             self.view.label(ids!(tags_display_label)).set_visible(cx, false);
             self.view.label(ids!(empty_label)).set_visible(cx, true);
         } else {
-            // 显示标签（临时用逗号分隔的文本）
-            let tags_text = format!("标签: {}", tags.join(", "));
+            // 显示标签名称
+            let tags_text = format!("标签: {}", tag_names.join(", "));
             self.view.label(ids!(tags_display_label)).set_text(cx, &tags_text);
             self.view.label(ids!(tags_display_label)).set_visible(cx, true);
             self.view.label(ids!(empty_label)).set_visible(cx, false);

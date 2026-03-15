@@ -68,6 +68,12 @@ pub enum KanbanActions {
         card_id: OwnedRoomId,
     },
     
+    /// 更新卡片状态
+    UpdateCardStatus {
+        card_id: OwnedRoomId,
+        status: crate::kanban::state::kanban_state::CardStatus,
+    },
+    
     // ========== Phase 2: TodoList Actions ==========
     
     /// 添加待办事项
@@ -97,16 +103,60 @@ pub enum KanbanActions {
     
     // ========== Phase 3: Tags Actions ==========
     
-    /// 添加标签
+    /// 添加标签（旧版本，使用标签名称）
     AddTag {
         card_id: OwnedRoomId,
         tag: String,
     },
     
-    /// 删除标签
+    /// 删除标签（旧版本，使用标签名称）
     RemoveTag {
         card_id: OwnedRoomId,
         tag: String,
+    },
+    
+    // ========== Space 标签管理 Actions ==========
+    
+    /// 加载 Space 标签库
+    LoadSpaceTags {
+        space_id: OwnedRoomId,
+    },
+    
+    /// Space 标签已加载
+    SpaceTagsLoaded {
+        space_id: OwnedRoomId,
+        tags: Vec<crate::kanban::state::kanban_state::SpaceTag>,
+    },
+    
+    /// 创建 Space 标签
+    CreateSpaceTag {
+        space_id: OwnedRoomId,
+        name: String,
+        color: String,
+    },
+    
+    /// 更新 Space 标签
+    UpdateSpaceTag {
+        space_id: OwnedRoomId,
+        tag: crate::kanban::state::kanban_state::SpaceTag,
+    },
+    
+    /// 删除 Space 标签
+    DeleteSpaceTag {
+        space_id: OwnedRoomId,
+        tag_id: String,
+    },
+    
+    /// 添加标签到 Card（使用标签 ID）
+    AddTagToCard {
+        card_id: OwnedRoomId,
+        tag_id: String,
+    },
+    
+    /// 从 Card 移除标签（使用标签 ID）
+    RemoveTagFromCard {
+        card_id: OwnedRoomId,
+        tag_id: String,
     },
     
     // ========== Phase 4: EndTime Actions ==========

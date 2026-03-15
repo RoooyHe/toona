@@ -3,6 +3,121 @@ use matrix_sdk::ruma::OwnedRoomId;
 use serde::{Deserialize, Serialize};
 use makepad_widgets::log;
 
+/// Card 状态枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardStatus {
+    /// 未完成状态
+    Pending,
+    
+    /// 已完成状态
+    Completed,
+    
+    /// 已归档状态
+    Archived,
+}
+
+impl CardStatus {
+    /// 获取状态的显示名称
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            CardStatus::Pending => "未完成",
+            CardStatus::Completed => "已完成",
+            CardStatus::Archived => "已归档",
+        }
+    }
+    
+    /// 获取状态的颜色
+    pub fn color(&self) -> &'static str {
+        match self {
+            CardStatus::Pending => "#FFA500",    // 橙色
+            CardStatus::Completed => "#61BD4F",  // 绿色
+            CardStatus::Archived => "#95A5A6",   // 灰色
+        }
+    }
+}
+
+impl Default for CardStatus {
+    fn default() -> Self {
+        CardStatus::Pending
+    }
+}
+
+/// Space 标签定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpaceTag {
+    /// 标签唯一 ID
+    pub id: String,
+    
+    /// 标签名称
+    pub name: String,
+    
+    /// 标签颜色（十六进制）
+    pub color: String,
+    
+    /// 标签描述（可选）
+    pub description: Option<String>,
+    
+    /// 创建时间（Unix timestamp 秒）
+    pub created_at: u64,
+    
+    /// 最后更新时间（Unix timestamp 秒）
+    pub updated_at: u64,
+}
+
+impl SpaceTag {
+    /// 创建新的 Space 标签
+    pub fn new(name: String, color: String) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        let random = uuid::Uuid::new_v4().to_string();
+        let id = format!("tag_{}_{}", now, &random[..8]);
+        
+        Self {
+            id,
+            name,
+            color,
+            description: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+    
+    /// 更新标签
+    pub fn update(&mut self, name: Option<String>, color: Option<String>, description: Option<String>) {
+        if let Some(n) = name {
+            self.name = n;
+        }
+        if let Some(c) = color {
+            self.color = c;
+        }
+        if description.is_some() {
+            self.description = description;
+        }
+        self.updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+    }
+}
+
+/// 预定义标签颜色
+pub const PREDEFINED_TAG_COLORS: &[(&str, &str)] = &[
+    ("红色", "#EB5A46"),
+    ("橙色", "#FF9F1A"),
+    ("黄色", "#F2D600"),
+    ("绿色", "#61BD4F"),
+    ("青色", "#00C2E0"),
+    ("蓝色", "#0079BF"),
+    ("紫色", "#9775FA"),
+    ("粉色", "#FF78CB"),
+    ("灰色", "#95A5A6"),
+    ("黑色", "#343434"),
+];
+
 /// 简化的看板列表（对应 Matrix Space）
 #[derive(Debug, Clone)]
 pub struct KanbanList {
@@ -36,6 +151,9 @@ pub struct KanbanCard {
     
     /// 排序位置（用于拖拽排序）
     pub position: f64,
+    
+    /// 卡片状态
+    pub status: CardStatus,
     
     // ========== Phase 1: 基础元数据 ==========
     
@@ -71,6 +189,7 @@ impl KanbanCard {
             description: None,
             space_id,
             position: 1000.0,
+            status: CardStatus::default(),
             tags: Vec::new(),
             end_time: None,
             todos: Vec::new(),
@@ -215,6 +334,9 @@ pub struct KanbanAppState {
 
     /// 活动记录缓存（Card ID -> Activities）
     pub activities: HashMap<OwnedRoomId, Vec<CardActivity>>,
+
+    /// Space 标签库（Space ID -> Tags）
+    pub space_tags: HashMap<OwnedRoomId, Vec<SpaceTag>>,
 
     /// 当前选中的卡片 ID（用于显示详情）
     pub selected_card_id: Option<OwnedRoomId>,
