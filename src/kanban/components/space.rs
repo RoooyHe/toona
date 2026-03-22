@@ -75,12 +75,81 @@ pub struct SpaceColumn {
     view: View,
     #[rust]
     list_id: Option<String>,
+    #[rust]
+    is_drop_target: bool,
 }
 
 impl Widget for SpaceColumn {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         
         self.view.handle_event(cx, event, scope);
+        
+        // 处理拖拽放置事件
+        match event {
+            Event::MouseMove(e) => {
+                // 检查是否有拖拽状态
+                if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                    if app_state.kanban_state.drag_state.is_some() {
+                        // 检测鼠标是否在当前 Space 上方
+                        let rect = self.view.area().rect(cx);
+                        let is_over = rect.contains(e.abs);
+                        
+                        if is_over != self.is_drop_target {
+                            self.is_drop_target = is_over;
+                            cx.redraw_all();
+                            
+                            if is_over {
+                                log!("SpaceColumn: 拖拽进入 Space {}", self.list_id.as_ref().unwrap_or(&"unknown".to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+            Event::MouseUp(e) => {
+                // 检查是否有拖拽状态且鼠标在当前 Space 上方
+                if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                    if let Some(drag_state) = &app_state.kanban_state.drag_state {
+                        let rect = self.view.area().rect(cx);
+                        let is_over = rect.contains(e.abs);
+                        
+                        if is_over {
+                            if let Some(space_id_str) = &self.list_id {
+                                if let Ok(target_space_id) = matrix_sdk::ruma::RoomId::parse(space_id_str.as_str()) {
+                                    log!("SpaceColumn: 放置卡片到 Space {}", target_space_id);
+                                    
+                                    // 计算目标位置（放到列表末尾）
+                                    let target_position = if let Some(list) = app_state.kanban_state.lists.get(&target_space_id) {
+                                        // 获取列表中最后一张卡片的位置
+                                        let last_position = list.card_ids.iter()
+                                            .filter_map(|card_id| app_state.kanban_state.cards.get(card_id))
+                                            .map(|card| card.position)
+                                            .max_by(|a, b| a.partial_cmp(b).unwrap())
+                                            .unwrap_or(0.0);
+                                        last_position + 1000.0
+                                    } else {
+                                        1000.0
+                                    };
+                                    
+                                    cx.action(crate::kanban::KanbanActions::DropCard {
+                                        card_id: drag_state.card_id.clone(),
+                                        target_space_id,
+                                        target_position,
+                                    });
+                                }
+                            }
+                        } else if drag_state.source_space_id.to_string() == *self.list_id.as_ref().unwrap_or(&String::new()) {
+                            // 如果鼠标不在任何 Space 上方，且当前是源 Space，取消拖拽
+                            log!("SpaceColumn: 取消拖拽");
+                            cx.action(crate::kanban::KanbanActions::CancelDragCard);
+                        }
+                        
+                        self.is_drop_target = false;
+                        cx.redraw_all();
+                    }
+                }
+            }
+            _ => {}
+        }
         
         // 处理列表标题按钮点击事件
         if let Event::Actions(actions) = event {
@@ -125,6 +194,9 @@ impl Widget for SpaceColumn {
         if let Some(space_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
             self.list_id = Some(space_id.to_string());
         }
+        
+        // 如果是拖拽目标，高亮边框（暂时移除 live! 宏的使用）
+        // TODO: 添加视觉反馈
         
         // 直接使用 scope 绘制，这样 CardList 可以从 scope.props 获取 space_id
         self.view.draw_walk(cx, scope, walk)

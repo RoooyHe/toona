@@ -525,8 +525,11 @@ impl Widget for TagManagementModal {
                             color,
                         });
                         
-                        // 不要立即清空输入框，等下一帧再清空
-                        // 这样可以避免在事件处理过程中清空导致的问题
+                        // 清空输入框
+                        self.view.text_input(ids!(tag_name_input)).set_text(cx, "");
+                        
+                        // 重置标签列表初始化标志，以便重新加载标签库
+                        self.tags_list_initialized = false;
                     } else {
                         log!("TagManagementModal: space_id 为 None，无法创建标签");
                     }
@@ -565,7 +568,6 @@ impl Widget for TagManagementModal {
                     if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
                         self.space_id = Some(card.space_id.clone());
                         self.card_id = Some(selected_card_id.clone());
-                        self.tags_list_initialized = false; // 重置标志
                         log!("TagManagementModal: 从 AppState 获取数据 space_id='{}', card_id='{}'", 
                             card.space_id, selected_card_id);
                     }
@@ -573,11 +575,17 @@ impl Widget for TagManagementModal {
             }
         }
         
-        // 更新标签按钮显示（只在第一次或数据变化时）
-        if !self.tags_list_initialized {
-            if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                if let Some(space_id) = &self.space_id {
-                    if let Some(tags) = app_state.kanban_state.space_tags.get(space_id) {
+        // 更新标签按钮显示
+        if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+            if let Some(space_id) = &self.space_id {
+                if let Some(tags) = app_state.kanban_state.space_tags.get(space_id) {
+                    // 检查标签库是否有变化
+                    let tags_changed = self.tag_buttons.len() != tags.len() 
+                        || self.tag_buttons.iter().enumerate().any(|(i, (id, _))| {
+                            tags.get(i).map(|t| &t.id != id).unwrap_or(true)
+                        });
+                    
+                    if tags_changed {
                         // 清空旧的标签按钮数据
                         self.tag_buttons.clear();
                         
@@ -625,8 +633,6 @@ impl Widget for TagManagementModal {
                                 self.tag_buttons.push((tag.id.clone(), tag.name.clone()));
                             }
                         }
-                        
-                        self.tags_list_initialized = true;
                     }
                 }
             }

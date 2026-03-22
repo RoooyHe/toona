@@ -627,6 +627,16 @@ pub enum MatrixRequest {
         space_id: OwnedRoomId,
         tag_id: String,
     },
+    
+    // ========== Phase 6: Drag and Drop Requests ==========
+    
+    /// Request to move a card to a different space
+    MoveCard {
+        card_id: OwnedRoomId,
+        source_space_id: OwnedRoomId,
+        target_space_id: OwnedRoomId,
+        card: crate::kanban::state::kanban_state::KanbanCard,
+    },
 }
 
 /// Submits a request to the worker thread to be executed asynchronously.
@@ -2417,6 +2427,54 @@ async fn matrix_worker_task(
                         Err(e) => {
                             error!("❌ Failed to delete tag: {e:?}");
                             Cx::post_action(KanbanActions::Error(format!("Failed to delete tag: {e}")));
+                        }
+                    }
+                    SignalToUI::set_ui_signal();
+                });
+            }
+            
+            // ========== Phase 6: Drag and Drop Request Handlers ==========
+            
+            MatrixRequest::MoveCard { card_id, source_space_id, target_space_id, card } => {
+                log!("🚚 MatrixRequest::MoveCard received! card_id={}, source={}, target={}", 
+                    card_id, source_space_id, target_space_id);
+                
+                let Some(client) = get_client() else {
+                    error!("❌ Cannot move card: Matrix client not available");
+                    continue;
+                };
+                
+                let _move_card_task = Handle::current().spawn(async move {
+                    use crate::kanban::MatrixKanbanAdapter;
+                    
+                    log!("🚚 Task started: Moving card {} from space {} to space {}", 
+                        card_id, source_space_id, target_space_id);
+                    let adapter = MatrixKanbanAdapter::new(client.clone());
+                    
+                    match adapter.move_card(&card_id, &source_space_id, &target_space_id, &card).await {
+                        Ok(_) => {
+                            log!("✅ Successfully moved card {} to space {}", card_id, target_space_id);
+                            
+                            // Reload the card to confirm the move
+                            match adapter.load_card(&card_id, target_space_id.clone()).await {
+                                Ok(updated_card) => {
+                                    Cx::post_action(KanbanActions::CardLoaded(updated_card));
+                                }
+                                Err(e) => {
+                                    error!("⚠️ Failed to reload card after move: {e:?}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to move card: {e:?}");
+                            
+                            // 发送失败 Action，触发回滚
+                            Cx::post_action(KanbanActions::MoveCardFailed {
+                                card_id,
+                                original_space_id: source_space_id,
+                                original_position: card.position,
+                                error: format!("{}", e),
+                            });
                         }
                     }
                     SignalToUI::set_ui_signal();

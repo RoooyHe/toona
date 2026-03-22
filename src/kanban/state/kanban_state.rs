@@ -323,6 +323,22 @@ impl TodoItem {
     }
 }
 
+/// 拖拽状态
+#[derive(Debug, Clone)]
+pub struct DragState {
+    /// 被拖拽的卡片 ID
+    pub card_id: OwnedRoomId,
+    
+    /// 卡片原始所属的 Space ID
+    pub source_space_id: OwnedRoomId,
+    
+    /// 卡片在原列表中的位置
+    pub source_position: f64,
+    
+    /// 拖拽开始时间（Unix timestamp 毫秒）
+    pub start_time: u64,
+}
+
 /// 看板应用状态
 #[derive(Debug, Clone, Default)]
 pub struct KanbanAppState {
@@ -340,6 +356,9 @@ pub struct KanbanAppState {
 
     /// 当前选中的卡片 ID（用于显示详情）
     pub selected_card_id: Option<OwnedRoomId>,
+
+    /// 拖拽状态
+    pub drag_state: Option<DragState>,
 
     /// 加载状态
     pub loading: bool,

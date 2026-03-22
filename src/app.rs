@@ -1250,7 +1250,14 @@ impl App {
             
             KanbanActions::ActivitiesLoaded { card_id, activities } => {
                 log!("📖 ActivitiesLoaded: card_id='{}', count={}", card_id, activities.len());
+                for activity in &activities {
+                    log!("  - Activity: type={:?}, user={}, text={}", 
+                        activity.activity_type, activity.user_id, activity.text);
+                }
                 state.activities.insert(card_id, activities);
+                
+                // 触发 UI 重绘以显示加载的活动
+                self.ui.redraw(cx);
             }
             
             // ========== Space 标签库管理 Action Handlers ==========
@@ -1395,6 +1402,141 @@ impl App {
                         });
                     }
                 }
+            }
+            
+            // ========== Phase 6: Drag and Drop Action Handlers ==========
+            
+            KanbanActions::StartDragCard { card_id, space_id, position } => {
+                log!("🎯 StartDragCard: card_id='{}', space_id='{}', position={}", card_id, space_id, position);
+                
+                // 创建拖拽状态
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+                
+                state.drag_state = Some(crate::kanban::state::kanban_state::DragState {
+                    card_id: card_id.clone(),
+                    source_space_id: space_id.clone(),
+                    source_position: position,
+                    start_time: now,
+                });
+                
+                log!("✅ Drag state created");
+                self.ui.redraw(cx);
+            }
+            
+            KanbanActions::DropCard { card_id, target_space_id, target_position } => {
+                log!("🎯 DropCard: card_id='{}', target_space_id='{}', target_position={}", 
+                    card_id, target_space_id, target_position);
+                
+                // 获取拖拽状态
+                let drag_state = state.drag_state.take();
+                
+                if let Some(drag_state) = drag_state {
+                    let source_space_id = drag_state.source_space_id.clone();
+                    let source_position = drag_state.source_position;
+                    
+                    // 检查是否真的移动了
+                    let is_same_space = source_space_id == target_space_id;
+                    let position_diff = (source_position - target_position).abs();
+                    
+                    if is_same_space && position_diff < 0.1 {
+                        log!("DropCard: Card dropped at same position, ignoring");
+                        return;
+                    }
+                    
+                    // 乐观更新：立即更新本地状态
+                    if let Some(card) = state.cards.get_mut(&card_id) {
+                        let old_space_id = card.space_id.clone();
+                        card.space_id = target_space_id.clone();
+                        card.position = target_position;
+                        card.touch();
+                        
+                        log!("✅ Updated card in local state: space_id={}, position={}", 
+                            target_space_id, target_position);
+                        
+                        // 更新列表的 card_ids
+                        if old_space_id != target_space_id {
+                            // 从旧列表移除
+                            if let Some(old_list) = state.lists.get_mut(&old_space_id) {
+                                old_list.card_ids.retain(|id| id != &card_id);
+                                log!("✅ Removed card from old list {}", old_space_id);
+                            }
+                            
+                            // 添加到新列表
+                            if let Some(new_list) = state.lists.get_mut(&target_space_id) {
+                                if !new_list.card_ids.contains(&card_id) {
+                                    new_list.card_ids.push(card_id.clone());
+                                    log!("✅ Added card to new list {}", target_space_id);
+                                }
+                            }
+                        }
+                        
+                        // 触发 UI 重绘
+                        self.ui.redraw(cx);
+                        
+                        // 异步同步到 Matrix
+                        if get_client().is_some() {
+                            let card_clone = card.clone();
+                            submit_async_request(MatrixRequest::MoveCard {
+                                card_id: card_id.clone(),
+                                source_space_id: old_space_id,
+                                target_space_id: target_space_id.clone(),
+                                card: card_clone,
+                            });
+                        }
+                    } else {
+                        log!("❌ DropCard: Card not found in state");
+                    }
+                } else {
+                    log!("⚠️ DropCard: No drag state found");
+                }
+            }
+            
+            KanbanActions::CancelDragCard => {
+                log!("❌ CancelDragCard");
+                
+                // 清除拖拽状态
+                state.drag_state = None;
+                self.ui.redraw(cx);
+            }
+            
+            KanbanActions::MoveCardFailed { card_id, original_space_id, original_position, error } => {
+                log!("❌ MoveCardFailed: card_id='{}', error='{}'", card_id, error);
+                
+                // 回滚本地状态
+                if let Some(card) = state.cards.get_mut(&card_id) {
+                    let current_space_id = card.space_id.clone();
+                    card.space_id = original_space_id.clone();
+                    card.position = original_position;
+                    
+                    // 更新列表的 card_ids
+                    if current_space_id != original_space_id {
+                        // 从当前列表移除
+                        if let Some(current_list) = state.lists.get_mut(&current_space_id) {
+                            current_list.card_ids.retain(|id| id != &card_id);
+                        }
+                        
+                        // 添加回原列表
+                        if let Some(original_list) = state.lists.get_mut(&original_space_id) {
+                            if !original_list.card_ids.contains(&card_id) {
+                                original_list.card_ids.push(card_id.clone());
+                            }
+                        }
+                    }
+                    
+                    log!("✅ Rolled back card to original position");
+                    self.ui.redraw(cx);
+                }
+                
+                // 显示错误提示
+                use crate::shared::popup_list::{PopupItem, PopupKind, enqueue_popup_notification};
+                enqueue_popup_notification(PopupItem {
+                    message: format!("移动卡片失败: {}", error),
+                    kind: PopupKind::Error,
+                    auto_dismissal_duration: Some(3000.0),
+                });
             }
 
             KanbanActions::Loading(loading) => {

@@ -153,11 +153,59 @@ pub struct CardItem {
     is_editing: bool,
     #[rust]
     original_title: String,
+    #[rust]
+    drag_start_pos: Option<DVec2>,
+    #[rust]
+    is_dragging: bool,
 }
 
 impl Widget for CardItem {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
+        
+        // 处理拖拽事件
+        match event {
+            Event::MouseDown(e) => {
+                // 记录按下位置
+                self.drag_start_pos = Some(e.abs);
+                log!("CardItem: MouseDown at {:?}", e.abs);
+            }
+            Event::MouseMove(e) => {
+                if let Some(start_pos) = self.drag_start_pos {
+                    let distance = (e.abs - start_pos).length();
+                    
+                    // 移动距离超过 5px 时开始拖拽
+                    if distance > 5.0 && !self.is_dragging {
+                        if let Some(card_id_str) = &self.card_id {
+                            if let Ok(card_id) = matrix_sdk::ruma::RoomId::parse(card_id_str.as_str()) {
+                                log!("CardItem: 开始拖拽卡片 {}", card_id);
+                                
+                                // 从 AppState 获取卡片信息
+                                if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+                                    if let Some(card) = app_state.kanban_state.cards.get(&card_id) {
+                                        cx.action(crate::kanban::KanbanActions::StartDragCard {
+                                            card_id: card_id.clone(),
+                                            space_id: card.space_id.clone(),
+                                            position: card.position,
+                                        });
+                                        self.is_dragging = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Event::MouseUp(_) => {
+                if self.is_dragging {
+                    log!("CardItem: 结束拖拽");
+                    // 拖拽结束由 Space 组件处理（检测放置目标）
+                    self.is_dragging = false;
+                }
+                self.drag_start_pos = None;
+            }
+            _ => {}
+        }
         
         if let Event::Actions(actions) = event {
             // 处理编辑按钮点击 - 显示编辑区域

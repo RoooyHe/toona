@@ -799,63 +799,150 @@ impl MatrixKanbanAdapter {
         
         log!("💬 Sending activity to card {}: type={:?}, text={}", card_id, activity_type, text);
         
-        // 获取当前用户ID
-        let user_id = self.client.user_id()
-            .context("User not logged in")?
-            .to_string();
+        use crate::kanban::state::kanban_state::ActivityType;
         
-        // 构建活动记录内容
+        // 评论使用标准的 m.text 消息
+        if matches!(activity_type, ActivityType::Comment) {
+            use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
+            let content = RoomMessageEventContent::text_plain(&text);
+            room.send(content).await
+                .context("Failed to send comment")?;
+            log!("✓ Comment sent successfully");
+            return Ok(());
+        }
+        
+        // 系统活动使用自定义消息类型
+        let activity_type_str = match activity_type {
+            ActivityType::StatusChange => "status_change",
+            ActivityType::TagAdded => "tag_added",
+            ActivityType::TagRemoved => "tag_removed",
+            ActivityType::TodoAdded => "todo_added",
+            ActivityType::TodoCompleted => "todo_completed",
+            ActivityType::TodoUncompleted => "todo_uncompleted",
+            ActivityType::EndTimeSet => "end_time_set",
+            ActivityType::EndTimeRemoved => "end_time_removed",
+            ActivityType::DescriptionChanged => "description_changed",
+            ActivityType::TitleChanged => "title_changed",
+            ActivityType::Comment => unreachable!(),
+        };
+        
         let content = serde_json::json!({
             "msgtype": "m.kanban.card.activity",
-            "activity_type": activity_type,
-            "text": text,
+            "body": text,
+            "activity_type": activity_type_str,
             "metadata": metadata,
-            "user_id": user_id,
         });
         
-        log!("💬 Activity content: {:?}", content);
+        let raw_content = serde_json::value::to_raw_value(&content)
+            .context("Failed to serialize activity content")?;
         
-        // 发送自定义消息事件
-        room.send_raw("m.room.message", content).await
+        room.send_raw("m.room.message", raw_content).await
             .context("Failed to send activity")?;
         
-        log!("✓ Activity sent successfully");
+        log!("✓ System activity sent successfully");
         Ok(())
     }
     
     /// 加载活动记录（从Timeline Events）
     /// 
-    /// 注意：这是简化实现，实际使用中Timeline API较复杂
-    /// 当前版本仅返回空列表，待后续完善
+    /// 加载卡片的活动记录
+    /// 从 Timeline 中加载评论和系统活动
     pub async fn load_activities(
         &self,
         card_id: &RoomId,
-        _limit: Option<usize>,
+        limit: Option<usize>,
     ) -> Result<Vec<crate::kanban::state::kanban_state::CardActivity>> {
         let _room = self.client.get_room(card_id)
             .context("Card room not found")?;
         
-        log!("📖 Loading activities from card {} (simplified implementation)", card_id);
+        log!("📖 Loading activities from card {}", card_id);
         
-        // TODO: 完整的Timeline API实现需要：
-        // 1. 使用 matrix_sdk_ui::timeline::RoomExt trait
-        // 2. 正确处理Timeline items的类型
-        // 3. 实现事件过滤和解析
-        // 
-        // 当前返回空列表，评论功能仍可正常发送
-        let activities = Vec::new();
+        // 获取房间消息（使用 messages API）
+        let mut request = matrix_sdk::ruma::api::client::message::get_message_events::v3::Request::new(
+            card_id.to_owned(),
+            matrix_sdk::ruma::api::Direction::Backward,
+        );
+        request.limit = limit.unwrap_or(50).try_into().unwrap();
         
-        log!("✓ Loaded {} activities (simplified)", activities.len());
-        Ok(activities)
+        match self.client.send(request).await {
+            Ok(response) => {
+                log!("📖 Got {} messages from timeline", response.chunk.len());
+                
+                let mut activities = Vec::new();
+                
+                for raw_event in response.chunk {
+                    // 反序列化事件
+                    if let Ok(event) = raw_event.deserialize() {
+                        if let Some(activity) = self.parse_activity_from_raw_event(&event) {
+                            activities.push(activity);
+                        }
+                    }
+                }
+                
+                // 按时间倒序排列（最新的在前）
+                activities.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                
+                log!("✅ Loaded {} activities from card", activities.len());
+                Ok(activities)
+            }
+            Err(e) => {
+                error!("❌ Failed to load activities: {}", e);
+                Ok(Vec::new())
+            }
+        }
     }
     
-    /// 从Timeline Event解析活动记录（占位实现）
-    #[allow(dead_code)]
-    async fn parse_activity_from_event(
+    /// 从原始事件解析活动记录
+    fn parse_activity_from_raw_event(
         &self,
-        _event: &str,  // 简化参数类型
+        event: &matrix_sdk::ruma::events::AnyTimelineEvent,
     ) -> Option<crate::kanban::state::kanban_state::CardActivity> {
-        // TODO: 实现完整的事件解析逻辑
+        use crate::kanban::state::kanban_state::{CardActivity, ActivityType};
+        use matrix_sdk::ruma::events::AnyTimelineEvent;
+        
+        match event {
+            AnyTimelineEvent::MessageLike(msg_event) => {
+                use matrix_sdk::ruma::events::AnyMessageLikeEvent;
+                
+                match msg_event {
+                    AnyMessageLikeEvent::RoomMessage(room_msg) => {
+                        let original = room_msg.as_original()?;
+                        let event_id = original.event_id.to_string();
+                        let sender = original.sender.to_string();
+                        let created_at = original.origin_server_ts.as_secs().into();
+                        
+                        // 获取消息内容
+                        let content = &original.content;
+                        
+                        use matrix_sdk::ruma::events::room::message::MessageType;
+                        match &content.msgtype {
+                            MessageType::Text(text_content) => {
+                                let body = text_content.body.clone();
+                                
+                                // 跳过卡片元数据消息
+                                if body.starts_with("Card metadata:") || body.starts_with("Card Metadata:") {
+                                    return None;
+                                }
+                                
+                                // 普通评论
+                                return Some(CardActivity {
+                                    id: event_id,
+                                    activity_type: ActivityType::Comment,
+                                    text: body,
+                                    metadata: None,
+                                    created_at,
+                                    user_id: sender,
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        
         None
     }
     
@@ -1034,4 +1121,202 @@ fn default_timestamp() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+impl MatrixKanbanAdapter {
+    // ========== Phase 6: Drag and Drop Methods ==========
+    
+    /// 移动卡片到不同的 Space
+    /// 
+    /// 这个方法会：
+    /// 1. 从旧 Space 移除卡片的父子关系
+    /// 2. 在新 Space 建立卡片的父子关系
+    /// 3. 更新卡片的元数据（space_id 和 position）
+    pub async fn move_card(
+        &self,
+        card_id: &RoomId,
+        source_space_id: &RoomId,
+        target_space_id: &RoomId,
+        card: &crate::kanban::state::kanban_state::KanbanCard,
+    ) -> Result<()> {
+        log!("🚚 move_card: Moving card {} from space {} to space {}", 
+            card_id, source_space_id, target_space_id);
+        
+        // 如果源和目标是同一个 Space，只更新 position
+        if source_space_id == target_space_id {
+            log!("🚚 Same space, only updating position to {}", card.position);
+            return self.save_card_metadata(card).await;
+        }
+        
+        let card_room = self.client.get_room(card_id)
+            .context("Card room not found")?;
+        let source_space = self.client.get_room(source_space_id)
+            .context("Source space not found")?;
+        let target_space = self.client.get_room(target_space_id)
+            .context("Target space not found")?;
+        
+        // ============================================================
+        // 步骤 1: 从旧 Space 移除卡片
+        // ============================================================
+        
+        log!("🚚 Step 1: Removing card from source space {}", source_space_id);
+        
+        // 1.1 删除 source space 的 m.space.child 事件
+        match source_space.send_state_event_raw(
+            "m.space.child",
+            card_id.as_str(),
+            serde_json::value::to_raw_value(&serde_json::json!({}))
+                .context("Failed to serialize empty content")?,
+        ).await {
+            Ok(_) => {
+                log!("✓ Removed m.space.child event from source space");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+            Err(e) => {
+                log!("⚠️ Failed to remove m.space.child from source space: {:?}", e);
+            }
+        }
+        
+        // 1.2 删除 card room 的 m.space.parent 事件（指向旧 space）
+        match card_room.send_state_event_raw(
+            "m.space.parent",
+            source_space_id.as_str(),
+            serde_json::value::to_raw_value(&serde_json::json!({}))
+                .context("Failed to serialize empty content")?,
+        ).await {
+            Ok(_) => {
+                log!("✓ Removed m.space.parent event from card room");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+            Err(e) => {
+                log!("⚠️ Failed to remove m.space.parent from card room: {:?}", e);
+            }
+        }
+        
+        // 1.3 更新 source space 的 m.kanban.cards 备用列表
+        log!("🚚 Updating source space backup card list...");
+        match self.get_card_list_from_state(&source_space).await {
+            Ok(mut card_ids) => {
+                card_ids.retain(|id| id != card_id);
+                
+                let cards_content = serde_json::json!({
+                    "card_ids": card_ids.iter().map(|id| id.as_str()).collect::<Vec<_>>()
+                });
+                
+                match source_space.send_state_event_raw(
+                    "m.kanban.cards",
+                    "",
+                    serde_json::value::to_raw_value(&cards_content)
+                        .context("Failed to serialize cards content")?,
+                ).await {
+                    Ok(_) => {
+                        log!("✓ Updated source space backup card list");
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    }
+                    Err(e) => {
+                        log!("⚠️ Failed to update source space backup list: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                log!("⚠️ Failed to get source space card list: {:?}", e);
+            }
+        }
+        
+        // ============================================================
+        // 步骤 2: 添加卡片到新 Space
+        // ============================================================
+        
+        log!("🚚 Step 2: Adding card to target space {}", target_space_id);
+        
+        // 2.1 在 target space 创建 m.space.child 事件
+        use matrix_sdk::ruma::events::space::child::SpaceChildEventContent;
+        let child_content = SpaceChildEventContent::new(vec![]);
+        
+        match target_space.send_state_event_raw(
+            "m.space.child",
+            card_id.as_str(),
+            serde_json::value::to_raw_value(&child_content)
+                .context("Failed to serialize space child content")?,
+        ).await {
+            Ok(_) => {
+                log!("✓ Created m.space.child event in target space");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+            Err(e) => {
+                error!("❌ Failed to create m.space.child in target space: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to add card to target space: {}", e));
+            }
+        }
+        
+        // 2.2 在 card room 创建 m.space.parent 事件（指向新 space）
+        use matrix_sdk::ruma::events::space::parent::SpaceParentEventContent;
+        let parent_content = SpaceParentEventContent::new(vec![]);
+        
+        match card_room.send_state_event_raw(
+            "m.space.parent",
+            target_space_id.as_str(),
+            serde_json::value::to_raw_value(&parent_content)
+                .context("Failed to serialize space parent content")?,
+        ).await {
+            Ok(_) => {
+                log!("✓ Created m.space.parent event in card room");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+            Err(e) => {
+                error!("❌ Failed to create m.space.parent in card room: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to set card parent: {}", e));
+            }
+        }
+        
+        // 2.3 更新 target space 的 m.kanban.cards 备用列表
+        log!("🚚 Updating target space backup card list...");
+        match self.get_card_list_from_state(&target_space).await {
+            Ok(mut card_ids) => {
+                if !card_ids.contains(&card_id.to_owned()) {
+                    card_ids.push(card_id.to_owned());
+                    
+                    let cards_content = serde_json::json!({
+                        "card_ids": card_ids.iter().map(|id| id.as_str()).collect::<Vec<_>>()
+                    });
+                    
+                    match target_space.send_state_event_raw(
+                        "m.kanban.cards",
+                        "",
+                        serde_json::value::to_raw_value(&cards_content)
+                            .context("Failed to serialize cards content")?,
+                    ).await {
+                        Ok(_) => {
+                            log!("✓ Updated target space backup card list");
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        }
+                        Err(e) => {
+                            log!("⚠️ Failed to update target space backup list: {:?}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log!("⚠️ Failed to get target space card list: {:?}", e);
+            }
+        }
+        
+        // ============================================================
+        // 步骤 3: 更新卡片元数据
+        // ============================================================
+        
+        log!("🚚 Step 3: Updating card metadata with new space_id and position");
+        self.save_card_metadata(card).await?;
+        
+        // 更新本地缓存
+        let source_space_owned = source_space_id.to_owned();
+        let card_id_owned = card_id.to_owned();
+        crate::kanban::local_cache::remove_card_from_cache(&source_space_owned, &card_id_owned);
+        crate::kanban::local_cache::add_card_to_space_cache(target_space_id.to_owned(), card_id.to_owned());
+        
+        log!("✅ Successfully moved card {} from space {} to space {}", 
+            card_id, source_space_id, target_space_id);
+        
+        Ok(())
+    }
 }

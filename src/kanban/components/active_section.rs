@@ -162,9 +162,9 @@ impl Widget for ActiveSection {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        let activities = if let Some(state) = scope.data.get::<crate::kanban::state::kanban_state::KanbanAppState>() {
-            if let Some(selected_card_id) = &state.selected_card_id {
-                state.activities.get(selected_card_id).cloned().unwrap_or_default()
+        let activities = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
+            if let Some(selected_card_id) = &app_state.kanban_state.selected_card_id {
+                app_state.kanban_state.activities.get(selected_card_id).cloned().unwrap_or_default()
             } else {
                 Vec::new()
             }
@@ -204,10 +204,10 @@ impl Widget for ActiveSection {
 
 impl WidgetMatchEvent for ActiveSection {
     fn handle_actions(&mut self, cx: &mut Cx, actions: &Actions, scope: &mut Scope) {
-        let kanban_state = scope.data.get::<crate::kanban::state::kanban_state::KanbanAppState>();
+        let app_state = scope.data.get::<crate::app::AppState>();
         
-        if let Some(state) = kanban_state {
-            if let Some(selected_card_id) = &state.selected_card_id {
+        if let Some(state) = app_state {
+            if let Some(selected_card_id) = &state.kanban_state.selected_card_id {
                 // 处理发送按钮点击
                 if self.button(ids!(send_button)).clicked(actions) {
                     let comment_text = self.text_input(ids!(comment_input)).text();

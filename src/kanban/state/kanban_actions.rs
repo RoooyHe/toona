@@ -202,6 +202,33 @@ pub enum KanbanActions {
         activities: Vec<crate::kanban::state::kanban_state::CardActivity>,
     },
     
+    // ========== Phase 6: Drag and Drop Actions ==========
+    
+    /// 开始拖拽卡片
+    StartDragCard {
+        card_id: OwnedRoomId,
+        space_id: OwnedRoomId,
+        position: f64,
+    },
+    
+    /// 结束拖拽（放置卡片）
+    DropCard {
+        card_id: OwnedRoomId,
+        target_space_id: OwnedRoomId,
+        target_position: f64,
+    },
+    
+    /// 取消拖拽
+    CancelDragCard,
+    
+    /// 卡片移动失败（用于回滚）
+    MoveCardFailed {
+        card_id: OwnedRoomId,
+        original_space_id: OwnedRoomId,
+        original_position: f64,
+        error: String,
+    },
+    
     /// 设置加载状态
     Loading(bool),
     
