@@ -1276,11 +1276,21 @@ impl Widget for RoomScreen {
 
             // If the list is not filling the viewport, we need to back paginate the timeline
             // until we have enough events items to fill the viewport.
-            if !tl_state.fully_paginated && !list.is_filling_viewport() {
+            // However, we skip automatic pagination if:
+            // - The timeline is fully paginated
+            // - A pagination request is already in progress
+            // - The last pagination request failed (to avoid infinite retry loops)
+            if !tl_state.fully_paginated 
+                && !tl_state.pagination_in_progress 
+                && !tl_state.pagination_failed 
+                && !list.is_filling_viewport() 
+            {
                 log!(
                     "Automatically paginating timeline to fill viewport for room {:?}",
                     self.room_name_id
                 );
+                // Set the flag immediately to prevent multiple requests in the same frame
+                tl_state.pagination_in_progress = true;
                 submit_async_request(MatrixRequest::PaginateRoomTimeline {
                     room_id: room_id.clone(),
                     num_events: 50,
@@ -1334,6 +1344,10 @@ impl RoomScreen {
                     is_append,
                     clear_cache,
                 } => {
+                    // Reset pagination_failed when we receive new items
+                    // This indicates that pagination is working and we can resume automatic pagination
+                    tl.pagination_failed = false;
+                    
                     if new_items.is_empty() {
                         if !tl.items.is_empty() {
                             log!(
@@ -1541,6 +1555,8 @@ impl RoomScreen {
                     if direction == PaginationDirection::Backwards {
                         top_space.set_visible(cx, true);
                         done_loading = false;
+                        tl.pagination_in_progress = true;
+                        tl.pagination_failed = false;
                     } else {
                         error!("Unexpected PaginationRunning update in the Forwards direction");
                     }
@@ -1560,6 +1576,8 @@ impl RoomScreen {
                         kind: PopupKind::Error,
                     });
                     done_loading = true;
+                    tl.pagination_in_progress = false;
+                    tl.pagination_failed = true;
                 }
                 TimelineUpdate::PaginationIdle {
                     fully_paginated,
@@ -1569,6 +1587,11 @@ impl RoomScreen {
                         // Don't set `done_loading` to `true` here, because we want to keep the top space visible
                         // (with the "loading" message) until the corresponding `NewItems` update is received.
                         tl.fully_paginated = fully_paginated;
+                        tl.pagination_in_progress = false;
+                        // Don't reset pagination_failed here - it should only be reset when:
+                        // 1. User manually triggers pagination (e.g., scrolling to top)
+                        // 2. Room is reloaded
+                        // 3. New items are received (indicating successful pagination)
                         if fully_paginated {
                             done_loading = true;
                         }
@@ -2420,6 +2443,8 @@ impl RoomScreen {
                 room_members: None,
                 // We assume timelines being viewed for the first time haven't been fully paginated.
                 fully_paginated: false,
+                pagination_in_progress: false,
+                pagination_failed: false,
                 items: Vector::new(),
                 content_drawn_since_last_update: RangeSet::new(),
                 profile_drawn_since_last_update: RangeSet::new(),
@@ -2932,6 +2957,14 @@ struct TimelineUiState {
     ///
     /// This must be reset to `false` whenever the timeline is fully cleared.
     fully_paginated: bool,
+
+    /// Whether a pagination request is currently in progress.
+    /// This prevents multiple pagination requests from being submitted in rapid succession.
+    pagination_in_progress: bool,
+
+    /// Whether the last pagination request failed with an error.
+    /// This prevents automatic pagination from retrying immediately after an error.
+    pagination_failed: bool,
 
     /// The list of items (events) in this room's timeline that our client currently knows about.
     items: Vector<Arc<TimelineItem>>,

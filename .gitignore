@@ -9,3 +9,5 @@ CLAUDE.md
 proxychains.conf
 
 .idea
+/synapse-data/
+/.kiro/

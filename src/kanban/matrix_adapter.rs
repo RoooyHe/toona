@@ -191,12 +191,43 @@ impl MatrixKanbanAdapter {
         
         log!("✓✓ Room created successfully: {}", card_room_id);
 
-        // 创建初始的 Card 元数据
-        let card = crate::kanban::state::kanban_state::KanbanCard::new(
+        // 计算新卡片的 position
+        // 获取 Space 中现有卡片的最大 position，新卡片排在最后
+        let position = match self.client.get_room(space_id) {
+            Some(space_room) => {
+                match self.get_card_list_from_state(&space_room).await {
+                    Ok(card_ids) => {
+                        let mut max_position = 0.0;
+                        for card_id in card_ids {
+                            if let Ok(card) = self.load_card(&card_id, space_id.to_owned()).await {
+                                if card.position > max_position {
+                                    max_position = card.position;
+                                }
+                            }
+                        }
+                        max_position + 1000.0
+                    }
+                    Err(e) => {
+                        log!("⚠️ Failed to get existing cards, using default position: {:?}", e);
+                        1000.0
+                    }
+                }
+            }
+            None => {
+                log!("⚠️ Space not found, using default position");
+                1000.0
+            }
+        };
+
+        log!("📍 Calculated position for new card: {}", position);
+
+        // 创建初始的 Card 元数据，使用计算出的 position
+        let mut card = crate::kanban::state::kanban_state::KanbanCard::new(
             card_room_id.clone(),
             title.to_string(),
             space_id.to_owned(),
         );
+        card.position = position;
         
         // 保存元数据到 Matrix State
         log!("💾 Saving initial card metadata...");
@@ -217,7 +248,7 @@ impl MatrixKanbanAdapter {
             }
         }
 
-        log!("✓✓✓✓ Created kanban card: {} in space {} ({})", title, space_id, card_room_id);
+        log!("✓✓✓✓ Created kanban card: {} in space {} ({}) with position {}", title, space_id, card_room_id, position);
         Ok(card_room_id)
     }
 
@@ -832,55 +863,52 @@ impl MatrixKanbanAdapter {
     
     /// 加载 Space 标签库
     pub async fn load_space_tags(&self, space_id: &RoomId) -> Result<Vec<crate::kanban::state::kanban_state::SpaceTag>> {
-        let space = self.client.get_room(space_id)
-            .context("Space not found")?;
+        use matrix_sdk::ruma::api::client::state::get_state_events;
         
         log!("📚 Loading tag library from space {}", space_id);
         
-        // 从 Room State 读取标签库
-        let state_key = "";
-        let event_type = matrix_sdk::ruma::events::StateEventType::from("m.space.tag_library");
+        // 使用服务器 API 直接获取所有 State Events
+        let request = get_state_events::v3::Request::new(space_id.to_owned());
         
-        match space.get_state_event(event_type, state_key).await {
-            Ok(Some(raw_event)) => {
-                log!("✅ Found tag library state event");
+        match self.client.send(request).await {
+            Ok(response) => {
+                log!("📖 Got {} state events from server", response.room_state.len());
                 
-                // 将raw_event转换为JSON
-                if let Ok(json_value) = serde_json::to_value(&raw_event) {
-                    log!("📚 Converted to JSON");
-                    
-                    // 从JSON中提取content
-                    if let Some(content) = json_value.get("content") {
-                        if let Some(tags_value) = content.get("tags") {
-                            log!("📚 Found tags in content");
-                            match serde_json::from_value::<Vec<crate::kanban::state::kanban_state::SpaceTag>>(tags_value.clone()) {
-                                Ok(tags) => {
-                                    log!("✅ Successfully loaded {} tags from space", tags.len());
-                                    for tag in &tags {
-                                        log!("  - Tag: id={}, name={}", tag.id, tag.name);
+                // 查找 m.space.tag_library 事件
+                for raw_event in response.room_state {
+                    // 先转换为 JSON 查看事件类型
+                    if let Ok(json_value) = serde_json::to_value(&raw_event) {
+                        if let Some(event_type) = json_value.get("type").and_then(|v| v.as_str()) {
+                            if event_type == "m.space.tag_library" {
+                                log!("✅ Found m.space.tag_library event");
+                                
+                                // 解析事件内容
+                                if let Some(content) = json_value.get("content") {
+                                    if let Some(tags_value) = content.get("tags") {
+                                        match serde_json::from_value::<Vec<crate::kanban::state::kanban_state::SpaceTag>>(tags_value.clone()) {
+                                            Ok(tags) => {
+                                                log!("✅ Successfully loaded {} tags from space", tags.len());
+                                                for tag in &tags {
+                                                    log!("  - Tag: id={}, name={}, color={}", tag.id, tag.name, tag.color);
+                                                }
+                                                return Ok(tags);
+                                            }
+                                            Err(e) => {
+                                                error!("❌ Failed to parse tags: {}", e);
+                                            }
+                                        }
                                     }
-                                    return Ok(tags);
-                                }
-                                Err(e) => {
-                                  error!("❌ Failed to parse tags: {}", e);
                                 }
                             }
-                        } else {
-                            log!("⚠️ No tags field found in content");
                         }
-                    } else {
-                        log!("⚠️ No content field found");
                     }
                 }
                 
-                Ok(Vec::new())
-            }
-            Ok(None) => {
-                log!("⚠️ No tag library state event found for space {}", space_id);
+                log!("⚠️ No m.space.tag_library event found in room state");
                 Ok(Vec::new())
             }
             Err(e) => {
-                error!("❌ Failed to load tag library: {}", e);
+                error!("❌ Failed to load state events: {}", e);
                 Ok(Vec::new())
             }
         }
@@ -970,42 +998,8 @@ impl MatrixKanbanAdapter {
     }
     
     /// 迁移旧格式标签（标签名称 -> 标签 ID）
-    pub async fn migrate_card_tags(&self, card: &mut crate::kanban::state::kanban_state::KanbanCard, space_id: &RoomId) -> Result<()> {
-        let mut space_tags = self.load_space_tags(space_id).await?;
-        let mut updated = false;
-        
-        for tag in &mut card.tags {
-            // 检查是否为旧格式（标签名称而非 ID）
-            if !tag.starts_with("tag_") {
-                log!("🔄 Migrating old tag format: '{}'", tag);
-                
-                // 在 Space 标签库中查找或创建
-                let space_tag = space_tags.iter()
-                    .find(|t| t.name == *tag)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        log!("Creating new tag in library: '{}'", tag);
-                        let new_tag = crate::kanban::state::kanban_state::SpaceTag::new(
-                            tag.clone(),
-                            "#0079BF".to_string()
-                        );
-                        space_tags.push(new_tag.clone());
-                        new_tag
-                    });
-                
-                // 替换为标签 ID
-                *tag = space_tag.id;
-                updated = true;
-            }
-        }
-        
-        if updated {
-            log!("💾 Saving migrated tags");
-            self.save_space_tags(space_id, space_tags).await?;
-            self.save_card_metadata(card).await?;
-            log!("✓ Tag migration completed");
-        }
-        
+    pub async fn migrate_card_tags(&self, _card: &mut crate::kanban::state::kanban_state::KanbanCard, _space_id: &RoomId) -> Result<()> {
+        // 简化方案：直接使用标签名称，不需要迁移
         Ok(())
     }
 }

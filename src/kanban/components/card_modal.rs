@@ -6,6 +6,7 @@ live_design! {
     use crate::kanban::components::modal_header::ModalHeader;
     use crate::kanban::components::card_info_section::CardInfoSection;
     use crate::kanban::components::tag_section::TagSection;
+    use crate::kanban::components::tag_management_modal::TagManagementModal;
     use crate::kanban::components::todo_section::TodoSection;
     use crate::kanban::components::endtime_section::EndTimeSection;
     use crate::kanban::components::active_section::ActiveSection;

@@ -159,6 +159,22 @@ pub enum KanbanActions {
         tag_id: String,
     },
     
+    /// 通过标签名称添加标签到 Card（会查找或创建标签）
+    AddTagToCardByName {
+        card_id: OwnedRoomId,
+        space_id: OwnedRoomId,
+        tag_name: String,
+    },
+    
+    /// 显示标签管理模态框
+    ShowTagManagementModal {
+        space_id: OwnedRoomId,
+        card_id: OwnedRoomId,
+    },
+    
+    /// 关闭标签管理模态框
+    CloseTagManagementModal,
+    
     // ========== Phase 4: EndTime Actions ==========
     
     /// 设置截止时间

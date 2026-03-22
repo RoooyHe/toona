@@ -65,6 +65,7 @@ live_design! {
     use crate::shared::image_viewer::ImageViewer;
     use link::tsp_link::TspVerificationModal;
     use crate::kanban::components::card_modal::CardDetailModal;
+    use crate::kanban::components::tag_management_modal::TagManagementModal;
     use crate::kanban::components::edit_list_name_modal::EditListNameModal;
 
 
@@ -156,6 +157,13 @@ live_design! {
 
                         // Show the card detail modal for kanban cards
                         card_detail_modal = <CardDetailModal> {}
+                        
+                        // Show the tag management modal for kanban cards
+                        tag_management_modal = <Modal> {
+                            content: {
+                                tag_management_modal_inner = <TagManagementModal> {}
+                            }
+                        }
                         
                         // Show the edit list name modal for kanban lists
                         edit_list_name_modal = <Modal> {
@@ -1332,6 +1340,60 @@ impl App {
                     
                     // 触发 UI 重绘
                     self.ui.redraw(cx);
+                }
+            }
+            
+            KanbanActions::AddTagToCardByName { card_id, space_id, tag_name } => {
+                log!("AddTagToCardByName: card_id='{}', space_id='{}', tag_name='{}'", card_id, space_id, tag_name);
+                
+                // 从标签库中查找标签
+                if let Some(tags) = state.space_tags.get(&space_id) {
+                    if let Some(tag) = tags.iter().find(|t| t.name == tag_name) {
+                        // 找到标签，添加到卡片
+                        if let Some(card) = state.cards.get_mut(&card_id) {
+                            if !card.tags.contains(&tag.id) {
+                                card.tags.push(tag.id.clone());
+                                card.touch();
+                                
+                                // 保存到 Matrix
+                                if get_client().is_some() {
+                                    submit_async_request(MatrixRequest::SaveCardMetadata {
+                                        card: card.clone(),
+                                    });
+                                }
+                                
+                                // 触发 UI 重绘
+                                self.ui.redraw(cx);
+                            }
+                        }
+                    } else {
+                        log!("AddTagToCardByName: Tag '{}' not found in space tags", tag_name);
+                    }
+                } else {
+                    log!("AddTagToCardByName: No tags found for space '{}'", space_id);
+                }
+            }
+            
+            KanbanActions::ShowTagManagementModal { space_id, card_id } => {
+                log!("ShowTagManagementModal: space_id='{}', card_id='{}'", space_id, card_id);
+                
+                // 打开标签管理模态框（数据会在 draw_walk 中从 AppState 获取）
+                self.ui.modal(ids!(tag_management_modal)).open(cx);
+            }
+            
+            KanbanActions::CloseTagManagementModal => {
+                log!("CloseTagManagementModal");
+                
+                // 关闭标签管理模态框
+                self.ui.modal(ids!(tag_management_modal)).close(cx);
+                
+                // 重新加载标签库以显示新创建的标签
+                if let Some(selected_card_id) = &state.selected_card_id {
+                    if let Some(card) = state.cards.get(selected_card_id) {
+                        submit_async_request(MatrixRequest::LoadSpaceTags { 
+                            space_id: card.space_id.clone() 
+                        });
+                    }
                 }
             }
 

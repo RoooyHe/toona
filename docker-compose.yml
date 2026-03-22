@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+      # - "8448:8448"  # Federation port (optional)
+    volumes:
+      - ./synapse-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: PostgreSQL database (uncomment for production use)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: synapse-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: synapse
+  #     POSTGRES_USER: synapse
+  #     POSTGRES_PASSWORD: changeme
+  #     POSTGRES_INITDB_ARGS: --encoding=UTF-8 --lc-collate=C --lc-ctype=C
+  #   volumes:
+  #     - ./postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U synapse"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  synapse-data:
+  # postgres-data:
