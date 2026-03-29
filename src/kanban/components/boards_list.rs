@@ -13,9 +13,9 @@ live_design! {
         draw_bg: {
             color: #0079BF
         }
-        
+
         flow: Down
-        
+
         board_name_label = <Label> {
             width: Fill,
             height: Fit,
@@ -25,12 +25,12 @@ live_design! {
                 color: #FFFFFF
             }
         }
-        
+
         <View> {
             width: Fill,
             height: Fit,
             margin: {top: 10}
-            
+
             <Label> {
                 text: "点击查看详情"
                 draw_text: {
@@ -47,7 +47,7 @@ live_design! {
             flow: Right
             spacing: 15
             padding: 10
-            
+
             Board = <BoardCard> {}
         }
     }
@@ -64,13 +64,15 @@ pub struct BoardCard {
 impl Widget for BoardCard {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         // 处理点击事件 - 使用 Hit 来检测点击
         match event.hits(cx, self.view.area()) {
             Hit::FingerUp(f) => {
                 if f.was_tap() {
                     // 简化架构：不再需要 SelectBoard，直接显示所有列表
-                    log!("BoardCard: Clicked (simplified architecture - no board selection needed)");
+                    log!(
+                        "BoardCard: Clicked (simplified architecture - no board selection needed)"
+                    );
                 }
             }
             _ => {}
@@ -82,7 +84,7 @@ impl Widget for BoardCard {
         if let Some(board_id) = scope.props.get::<String>() {
             self.board_id = Some(board_id.clone());
         }
-        
+
         self.view.draw_walk(cx, scope, walk)
     }
 }
@@ -104,12 +106,17 @@ impl Widget for BoardsList {
                 // 简化架构：显示所有列表（Space）而不是看板
                 let lists: Vec<_> = {
                     if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                        app_state.kanban_state.all_lists().into_iter().map(|l| l.clone()).collect()
+                        app_state
+                            .kanban_state
+                            .all_lists()
+                            .into_iter()
+                            .map(|l| l.clone())
+                            .collect()
                     } else {
                         Vec::new()
                     }
                 };
-                
+
                 list.set_item_range(cx, 0, lists.len());
 
                 while let Some(list_idx) = list.next_visible_item(cx) {
@@ -125,7 +132,7 @@ impl Widget for BoardsList {
                     list_item
                         .label(ids!(board_name_label))
                         .set_text(cx, &kanban_list.name);
-                    
+
                     // 传递 space_id 给 BoardCard 并立即绘制
                     let space_id_str = kanban_list.id.to_string();
                     if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {

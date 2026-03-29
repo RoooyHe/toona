@@ -24,7 +24,7 @@ pub struct State {
     pub pending_add_card_space_id: Option<i64>,
     pub pending_edit_card_id: Option<i64>,
     pub pending_delete_card_id: Option<i64>,
-    pub pending_detail_card_id: Option<i64>,  // 新增：待查看详情的卡片ID
+    pub pending_detail_card_id: Option<i64>, // 新增：待查看详情的卡片ID
 
     // 卡片详情模态框
     pub card_detail_modal_visible: bool,
@@ -59,7 +59,7 @@ pub struct State {
     pub pending_add_tag_to_card: Option<(i64, i64)>, // (card_id, tag_id)
     pub card_tags_update_signal: SignalToUI,
     pub card_tags_update_rx: Option<Receiver<bool>>,
-    
+
     // 新增标签
     pub new_tag_input: String,
     pub show_new_tag_input: bool,
@@ -151,7 +151,7 @@ impl Default for State {
             pending_add_tag_to_card: None,
             card_tags_update_signal: SignalToUI::default(),
             card_tags_update_rx: None,
-            
+
             // 新增标签
             new_tag_input: String::new(),
             show_new_tag_input: false,

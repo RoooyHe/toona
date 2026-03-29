@@ -196,7 +196,7 @@ pub struct TodoItem {
 impl Widget for TodoItem {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理复选框点击
             if self.view.button(ids!(checkbox)).clicked(actions) {
@@ -208,7 +208,7 @@ impl Widget for TodoItem {
                     });
                 }
             }
-            
+
             // 处理删除按钮
             if self.view.button(ids!(delete_btn)).clicked(actions) {
                 if let Some(card_id) = &self.card_id {
@@ -240,22 +240,26 @@ pub struct TodoSection {
 impl Widget for TodoSection {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理添加待办按钮
             if self.view.button(ids!(add_todo_button)).clicked(actions) {
                 log!("TodoSection: 添加待办按钮被点击");
                 self.is_adding = true;
-                self.view.view(ids!(add_todo_input_container)).set_visible(cx, true);
-                self.view.button(ids!(add_todo_button)).set_visible(cx, false);
+                self.view
+                    .view(ids!(add_todo_input_container))
+                    .set_visible(cx, true);
+                self.view
+                    .button(ids!(add_todo_button))
+                    .set_visible(cx, false);
                 self.view.redraw(cx);
             }
-            
+
             // 处理保存待办按钮
             if self.view.button(ids!(save_todo_button)).clicked(actions) {
                 log!("TodoSection: 保存待办按钮被点击");
                 let text = self.view.text_input(ids!(new_todo_input)).text();
-                
+
                 if !text.is_empty() {
                     if let Some(card_id) = &self.card_id {
                         log!("TodoSection: 添加待办 '{}' 到卡片 {}", text, card_id);
@@ -265,22 +269,30 @@ impl Widget for TodoSection {
                         });
                     }
                 }
-                
+
                 // 重置输入框
                 self.view.text_input(ids!(new_todo_input)).set_text(cx, "");
                 self.is_adding = false;
-                self.view.view(ids!(add_todo_input_container)).set_visible(cx, false);
-                self.view.button(ids!(add_todo_button)).set_visible(cx, true);
+                self.view
+                    .view(ids!(add_todo_input_container))
+                    .set_visible(cx, false);
+                self.view
+                    .button(ids!(add_todo_button))
+                    .set_visible(cx, true);
                 self.view.redraw(cx);
             }
-            
+
             // 处理取消按钮
             if self.view.button(ids!(cancel_todo_button)).clicked(actions) {
                 log!("TodoSection: 取消添加待办");
                 self.view.text_input(ids!(new_todo_input)).set_text(cx, "");
                 self.is_adding = false;
-                self.view.view(ids!(add_todo_input_container)).set_visible(cx, false);
-                self.view.button(ids!(add_todo_button)).set_visible(cx, true);
+                self.view
+                    .view(ids!(add_todo_input_container))
+                    .set_visible(cx, false);
+                self.view
+                    .button(ids!(add_todo_button))
+                    .set_visible(cx, true);
                 self.view.redraw(cx);
             }
         }
@@ -291,15 +303,17 @@ impl Widget for TodoSection {
         let todos: Vec<_> = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
             if let Some(selected_card_id) = &app_state.kanban_state.selected_card_id {
                 self.card_id = Some(selected_card_id.clone());
-                
+
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
                     // 更新进度显示
                     let (completed, total) = card.todo_progress();
                     let progress_text = format!("{}/{}", completed, total);
-                    self.view.label(ids!(progress_label)).set_text(cx, &progress_text);
-                    
+                    self.view
+                        .label(ids!(progress_label))
+                        .set_text(cx, &progress_text);
+
                     // log!("🎨 TodoSection draw_walk: card_id={}, todos_count={}", selected_card_id, card.todos.len());
-                    
+
                     // 克隆todos列表
                     card.todos.clone()
                 } else {
@@ -329,7 +343,7 @@ impl Widget for TodoSection {
 
                     let todo_item_widget = list.item(cx, todo_idx, live_id!(TodoItem));
                     let todo = &todos[todo_idx];
-                    
+
                     // 设置复选框状态（通过改变背景色和文本）
                     let checkbox_btn = todo_item_widget.button(ids!(checkbox));
                     if todo.completed {
@@ -337,18 +351,18 @@ impl Widget for TodoSection {
                     } else {
                         checkbox_btn.set_text(cx, "");
                     }
-                    
+
                     // 设置Todo文本
                     let todo_label = todo_item_widget.label(ids!(todo_text));
                     todo_label.set_text(cx, &todo.text);
-                    
+
                     // 传递 todo_id 和 card_id 给 TodoItem
                     let todo_item_ref = todo_item_widget.as_todo_item();
                     if let Some(mut todo_item) = todo_item_ref.borrow_mut() {
                         todo_item.todo_id = todo.id.clone();
                         todo_item.card_id = self.card_id.clone();
                     }
-                    
+
                     todo_item_widget.draw_all(cx, &mut Scope::empty());
                 }
             }

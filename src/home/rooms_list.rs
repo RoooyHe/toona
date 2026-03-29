@@ -1214,7 +1214,7 @@ impl Widget for RoomsList {
                         }
                     }
                 }
-                
+
                 let new_selected_room = if let Some(jr) =
                     self.all_joined_rooms.get(&clicked_room_id)
                 {

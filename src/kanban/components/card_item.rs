@@ -169,10 +169,25 @@ impl Widget for CardItem {
             match event {
                 Event::MouseDown(e) => {
                     // 检查是否点击在按钮上
-                    let edit_btn_hit = self.view.button(ids!(edit_title_btn)).area().rect(cx).contains(e.abs);
-                    let detail_btn_hit = self.view.button(ids!(detail_btn)).area().rect(cx).contains(e.abs);
-                    let delete_btn_hit = self.view.button(ids!(delete_card_btn)).area().rect(cx).contains(e.abs);
-                    
+                    let edit_btn_hit = self
+                        .view
+                        .button(ids!(edit_title_btn))
+                        .area()
+                        .rect(cx)
+                        .contains(e.abs);
+                    let detail_btn_hit = self
+                        .view
+                        .button(ids!(detail_btn))
+                        .area()
+                        .rect(cx)
+                        .contains(e.abs);
+                    let delete_btn_hit = self
+                        .view
+                        .button(ids!(delete_card_btn))
+                        .area()
+                        .rect(cx)
+                        .contains(e.abs);
+
                     // 如果点击在按钮上，不启动拖拽
                     if !edit_btn_hit && !detail_btn_hit && !delete_btn_hit {
                         self.drag_start_pos = Some(e.abs);
@@ -191,13 +206,19 @@ impl Widget for CardItem {
                                     log!("CardItem: 开始拖拽卡片 {}", card_id);
 
                                     // 从 AppState 获取卡片信息
-                                    if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-                                        if let Some(card) = app_state.kanban_state.cards.get(&card_id) {
-                                            cx.action(crate::kanban::KanbanActions::StartDragCard {
-                                                card_id: card_id.clone(),
-                                                space_id: card.space_id.clone(),
-                                                position: card.position,
-                                            });
+                                    if let Some(app_state) =
+                                        scope.data.get::<crate::app::AppState>()
+                                    {
+                                        if let Some(card) =
+                                            app_state.kanban_state.cards.get(&card_id)
+                                        {
+                                            cx.action(
+                                                crate::kanban::KanbanActions::StartDragCard {
+                                                    card_id: card_id.clone(),
+                                                    space_id: card.space_id.clone(),
+                                                    position: card.position,
+                                                },
+                                            );
                                             self.is_dragging = true;
                                         }
                                     }

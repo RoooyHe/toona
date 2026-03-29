@@ -11,14 +11,14 @@ live_design! {
             height: Fill,  // 改为Fill，确保有足够的高度
             flow: Down,
             spacing: 5,
-            
+
             cards = <PortalList> {
                 flow: Down,
                 spacing: 5,
 
                 Card = <CardItem> {}
             }
-            
+
             // 新卡片输入框
             new_card_input = <View> {
                 width: Fill,
@@ -35,7 +35,7 @@ live_design! {
                     draw_bg: {
                         color: #F0F8FFFF
                     }
-                    
+
                     new_card_text_input = <TextInput> {
                         width: Fill,
                         height: Fill,
@@ -54,7 +54,7 @@ live_design! {
                         }
                     }
                 }
-                
+
                 <Label> {
                     text: "输入卡片标题，按回车保存",
                     draw_text: {
@@ -78,19 +78,29 @@ pub struct CardList {
 impl Widget for CardList {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理新卡片输入框的事件
-            if let Some(_text) = self.view.text_input(ids!(new_card_text_input)).changed(actions) {
+            if let Some(_text) = self
+                .view
+                .text_input(ids!(new_card_text_input))
+                .changed(actions)
+            {
                 // TODO: 实现新卡片输入状态管理
             }
-            
+
             // 处理回车键创建新卡片
-            if let Some((text, _)) = self.view.text_input(ids!(new_card_text_input)).returned(actions) {
+            if let Some((text, _)) = self
+                .view
+                .text_input(ids!(new_card_text_input))
+                .returned(actions)
+            {
                 if !text.trim().is_empty() {
                     println!("新卡片输入框回车，创建卡片: '{}'", text.trim());
                     // TODO: 触发创建卡片的 Action
-                    self.view.text_input(ids!(new_card_text_input)).set_text(cx, "");
+                    self.view
+                        .text_input(ids!(new_card_text_input))
+                        .set_text(cx, "");
                 }
             }
         }
@@ -103,16 +113,23 @@ impl Widget for CardList {
         } else {
             return DrawStep::done();
         };
-        
+
         // 获取卡片数据并克隆，避免借用冲突
         let cards: Vec<_> = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
-            app_state.kanban_state.list_cards(&space_id).into_iter().map(|c| c.clone()).collect()
+            app_state
+                .kanban_state
+                .list_cards(&space_id)
+                .into_iter()
+                .map(|c| c.clone())
+                .collect()
         } else {
             Vec::new()
         };
 
         // 隐藏新卡片输入框（暂时不实现）
-        self.view.view(ids!(new_card_input)).apply_over(cx, live! { visible: false });
+        self.view
+            .view(ids!(new_card_input))
+            .apply_over(cx, live! { visible: false });
 
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if let Some(mut list) = item.as_portal_list().borrow_mut() {
@@ -126,13 +143,13 @@ impl Widget for CardList {
                     let card_item = list.item(cx, card_idx, live_id!(Card));
                     let card = &cards[card_idx];
                     let card_id = card.id.clone();
-                    
+
                     // 先传递 card_id 并绘制，这样 CardItem 的状态会被保留
                     if let Some(app_state) = scope.data.get_mut::<crate::app::AppState>() {
                         let mut card_scope = Scope::with_data_props(app_state, &card_id);
                         card_item.draw_all(cx, &mut card_scope);
                     }
-                    
+
                     // 然后再设置文本（只有在非编辑状态时才会生效）
                     // 注意：这里我们需要检查 CardItem 是否在编辑状态
                     // 但是我们无法直接访问 CardItem 的内部状态
@@ -151,9 +168,7 @@ impl Widget for CardList {
                     } else {
                         "描述: 无".to_string()
                     };
-                    card_item
-                        .label(ids!(card_tags))
-                        .set_text(cx, &tags_text);
+                    card_item.label(ids!(card_tags)).set_text(cx, &tags_text);
                 }
             }
         }

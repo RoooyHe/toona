@@ -9,10 +9,10 @@ use makepad_widgets::log;
 pub enum CardStatus {
     /// 未完成状态
     Pending,
-    
+
     /// 已完成状态
     Completed,
-    
+
     /// 已归档状态
     Archived,
 }
@@ -26,13 +26,13 @@ impl CardStatus {
             CardStatus::Archived => "已归档",
         }
     }
-    
+
     /// 获取状态的颜色
     pub fn color(&self) -> &'static str {
         match self {
-            CardStatus::Pending => "#FFA500",    // 橙色
-            CardStatus::Completed => "#61BD4F",  // 绿色
-            CardStatus::Archived => "#95A5A6",   // 灰色
+            CardStatus::Pending => "#FFA500",   // 橙色
+            CardStatus::Completed => "#61BD4F", // 绿色
+            CardStatus::Archived => "#95A5A6",  // 灰色
         }
     }
 }
@@ -48,19 +48,19 @@ impl Default for CardStatus {
 pub struct SpaceTag {
     /// 标签唯一 ID
     pub id: String,
-    
+
     /// 标签名称
     pub name: String,
-    
+
     /// 标签颜色（十六进制）
     pub color: String,
-    
+
     /// 标签描述（可选）
     pub description: Option<String>,
-    
+
     /// 创建时间（Unix timestamp 秒）
     pub created_at: u64,
-    
+
     /// 最后更新时间（Unix timestamp 秒）
     pub updated_at: u64,
 }
@@ -72,10 +72,10 @@ impl SpaceTag {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let random = uuid::Uuid::new_v4().to_string();
         let id = format!("tag_{}_{}", now, &random[..8]);
-        
+
         Self {
             id,
             name,
@@ -85,9 +85,14 @@ impl SpaceTag {
             updated_at: now,
         }
     }
-    
+
     /// 更新标签
-    pub fn update(&mut self, name: Option<String>, color: Option<String>, description: Option<String>) {
+    pub fn update(
+        &mut self,
+        name: Option<String>,
+        color: Option<String>,
+        description: Option<String>,
+    ) {
         if let Some(n) = name {
             self.name = n;
         }
@@ -123,13 +128,13 @@ pub const PREDEFINED_TAG_COLORS: &[(&str, &str)] = &[
 pub struct KanbanList {
     /// 列表 ID（Space ID）
     pub id: OwnedRoomId,
-    
+
     /// 列表名称
     pub name: String,
-    
+
     /// 卡片 ID 列表
     pub card_ids: Vec<OwnedRoomId>,
-    
+
     /// 排序位置
     pub position: f64,
 }
@@ -139,38 +144,36 @@ pub struct KanbanList {
 pub struct KanbanCard {
     /// 卡片 ID（Room ID）
     pub id: OwnedRoomId,
-    
+
     /// 卡片标题
     pub title: String,
-    
+
     /// 卡片描述（支持 Markdown）
     pub description: Option<String>,
-    
+
     /// 所属列表 ID（Space ID）
     pub space_id: OwnedRoomId,
-    
+
     /// 排序位置（用于拖拽排序）
     pub position: f64,
-    
+
     /// 卡片状态
     pub status: CardStatus,
-    
+
     // ========== Phase 1: 基础元数据 ==========
-    
     /// 标签列表
     pub tags: Vec<String>,
-    
+
     /// 截止时间（Unix timestamp 秒）
     pub end_time: Option<u64>,
-    
+
     // ========== Phase 2: TodoList ==========
-    
     /// 待办事项列表
     pub todos: Vec<TodoItem>,
-    
+
     /// 创建时间（Unix timestamp 秒）
     pub created_at: u64,
-    
+
     /// 最后更新时间（Unix timestamp 秒）
     pub updated_at: u64,
 }
@@ -182,7 +185,7 @@ impl KanbanCard {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             id,
             title,
@@ -197,7 +200,7 @@ impl KanbanCard {
             updated_at: now,
         }
     }
-    
+
     /// 更新时间戳
     pub fn touch(&mut self) {
         self.updated_at = std::time::SystemTime::now()
@@ -205,7 +208,7 @@ impl KanbanCard {
             .unwrap()
             .as_secs();
     }
-    
+
     /// 是否已过期
     pub fn is_overdue(&self) -> bool {
         if let Some(end_time) = self.end_time {
@@ -218,7 +221,7 @@ impl KanbanCard {
             false
         }
     }
-    
+
     /// 获取 Todo 完成进度 (completed, total)
     pub fn todo_progress(&self) -> (usize, usize) {
         let completed = self.todos.iter().filter(|t| t.completed).count();
@@ -232,16 +235,16 @@ impl KanbanCard {
 pub struct TodoItem {
     /// Todo 唯一标识符
     pub id: String,
-    
+
     /// 待办内容
     pub text: String,
-    
+
     /// 是否完成
     pub completed: bool,
-    
+
     /// 创建时间（Unix timestamp 秒）
     pub created_at: u64,
-    
+
     /// 完成时间（Unix timestamp 秒）
     pub completed_at: Option<u64>,
 }
@@ -263,25 +266,78 @@ pub enum ActivityType {
     TitleChanged,
 }
 
+impl ActivityType {
+    /// 获取活动类型的图标符号
+    pub fn icon_symbol(&self) -> &'static str {
+        match self {
+            ActivityType::Comment => "💬",
+            ActivityType::StatusChange => "🔄",
+            ActivityType::TagAdded => "🏷️",
+            ActivityType::TagRemoved => "🏷️",
+            ActivityType::TodoAdded => "➕",
+            ActivityType::TodoCompleted => "✅",
+            ActivityType::TodoUncompleted => "⬜",
+            ActivityType::EndTimeSet => "📅",
+            ActivityType::EndTimeRemoved => "📅",
+            ActivityType::DescriptionChanged => "📝",
+            ActivityType::TitleChanged => "✏️",
+        }
+    }
+
+    /// 获取活动类型的图标颜色 (十六进制)
+    pub fn icon_color(&self) -> &'static str {
+        match self {
+            ActivityType::Comment => "#4A90D9",            // 蓝色 - 评论
+            ActivityType::StatusChange => "#F5A623",       // 橙色 - 状态变更
+            ActivityType::TagAdded => "#7ED321",           // 绿色 - 添加标签
+            ActivityType::TagRemoved => "#D0021B",         // 红色 - 移除标签
+            ActivityType::TodoAdded => "#7ED321",          // 绿色 - 添加待办
+            ActivityType::TodoCompleted => "#7ED321",      // 绿色 - 完成待办
+            ActivityType::TodoUncompleted => "#9B9B9B",    // 灰色 - 取消完成
+            ActivityType::EndTimeSet => "#4A90D9",         // 蓝色 - 设置截止时间
+            ActivityType::EndTimeRemoved => "#D0021B",     // 红色 - 移除截止时间
+            ActivityType::DescriptionChanged => "#4A90D9", // 蓝色 - 描述变更
+            ActivityType::TitleChanged => "#4A90D9",       // 蓝色 - 标题变更
+        }
+    }
+
+    /// 获取活动类型的显示文本
+    pub fn display_text(&self) -> &'static str {
+        match self {
+            ActivityType::Comment => "评论",
+            ActivityType::StatusChange => "更新了状态",
+            ActivityType::TagAdded => "添加了标签",
+            ActivityType::TagRemoved => "移除了标签",
+            ActivityType::TodoAdded => "添加了待办",
+            ActivityType::TodoCompleted => "完成了待办",
+            ActivityType::TodoUncompleted => "取消了待办完成",
+            ActivityType::EndTimeSet => "设置了截止时间",
+            ActivityType::EndTimeRemoved => "移除了截止时间",
+            ActivityType::DescriptionChanged => "更新了描述",
+            ActivityType::TitleChanged => "更新了标题",
+        }
+    }
+}
+
 /// 活动记录
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardActivity {
     /// 活动ID（Timeline Event ID）
     pub id: String,
-    
+
     /// 活动类型
     pub activity_type: ActivityType,
-    
+
     /// 活动文本内容
     pub text: String,
-    
+
     /// 活动元数据（可选）
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
-    
+
     /// 创建时间（Unix timestamp 秒）
     pub created_at: u64,
-    
+
     /// 创建者用户ID
     pub user_id: String,
 }
@@ -293,11 +349,11 @@ impl TodoItem {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         // 生成唯一 ID: todo_{timestamp}_{random}
         let random = uuid::Uuid::new_v4().to_string();
         let id = format!("todo_{}_{}", now, &random[..8]);
-        
+
         Self {
             id,
             text,
@@ -306,7 +362,7 @@ impl TodoItem {
             completed_at: None,
         }
     }
-    
+
     /// 切换完成状态
     pub fn toggle(&mut self) {
         self.completed = !self.completed;
@@ -315,7 +371,7 @@ impl TodoItem {
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
-                    .as_secs()
+                    .as_secs(),
             );
         } else {
             self.completed_at = None;
@@ -328,13 +384,13 @@ impl TodoItem {
 pub struct DragState {
     /// 被拖拽的卡片 ID
     pub card_id: OwnedRoomId,
-    
+
     /// 卡片原始所属的 Space ID
     pub source_space_id: OwnedRoomId,
-    
+
     /// 卡片在原列表中的位置
     pub source_position: f64,
-    
+
     /// 拖拽开始时间（Unix timestamp 毫秒）
     pub start_time: u64,
 }
@@ -396,19 +452,22 @@ impl KanbanAppState {
         // 如果列表已存在，保留现有的卡片 ID 和可能更新的名称
         if let Some(existing_list) = self.lists.get(&list.id) {
             let mut updated_list = list;
-            
+
             // 如果新列表的卡片为空，保留现有卡片
             if updated_list.card_ids.is_empty() && !existing_list.card_ids.is_empty() {
                 updated_list.card_ids = existing_list.card_ids.clone();
             }
-            
+
             // 如果新列表名称是"新列表"（默认值），但现有列表有不同的名称，
             // 则保留现有名称（可能是用户刚刚编辑的）
             if updated_list.name == "新列表" && existing_list.name != "新列表" {
-                log!("🔄 upsert_list: 保留现有列表名称 '{}' 而不是使用默认值 '新列表'", existing_list.name);
+                log!(
+                    "🔄 upsert_list: 保留现有列表名称 '{}' 而不是使用默认值 '新列表'",
+                    existing_list.name
+                );
                 updated_list.name = existing_list.name.clone();
             }
-            
+
             self.lists.insert(updated_list.id.clone(), updated_list);
         } else {
             // 新列表，直接插入

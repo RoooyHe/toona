@@ -100,22 +100,26 @@ pub struct EditListNameModal {
 impl Widget for EditListNameModal {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理保存按钮
             if self.view.button(ids!(save_button)).clicked(actions) {
                 log!("EditListNameModal: 保存按钮被点击");
                 let text = self.view.text_input(ids!(list_name_input)).text();
                 log!("EditListNameModal: 输入框文本: '{}'", text);
-                
+
                 if !text.trim().is_empty() {
                     if let Some(list_id) = &self.list_id {
-                        log!("EditListNameModal: 保存列表名称 '{}' (列表ID: {})", text.trim(), list_id);
+                        log!(
+                            "EditListNameModal: 保存列表名称 '{}' (列表ID: {})",
+                            text.trim(),
+                            list_id
+                        );
                         cx.action(crate::kanban::KanbanActions::UpdateListName {
                             list_id: list_id.clone(),
                             name: text.trim().to_string(),
                         });
-                        
+
                         // 关闭模态框
                         log!("EditListNameModal: 关闭模态框");
                         cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
@@ -126,24 +130,32 @@ impl Widget for EditListNameModal {
                     log!("⚠️ EditListNameModal: 输入框为空");
                 }
             }
-            
+
             // 处理取消按钮
             if self.view.button(ids!(cancel_button)).clicked(actions) {
                 log!("EditListNameModal: 取消编辑");
                 cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
             }
-            
+
             // 处理回车键
-            if let Some((text, _)) = self.view.text_input(ids!(list_name_input)).returned(actions) {
+            if let Some((text, _)) = self
+                .view
+                .text_input(ids!(list_name_input))
+                .returned(actions)
+            {
                 log!("EditListNameModal: 回车键被按下，文本: '{}'", text);
                 if !text.trim().is_empty() {
                     if let Some(list_id) = &self.list_id {
-                        log!("EditListNameModal: 回车保存列表名称 '{}' (列表ID: {})", text.trim(), list_id);
+                        log!(
+                            "EditListNameModal: 回车保存列表名称 '{}' (列表ID: {})",
+                            text.trim(),
+                            list_id
+                        );
                         cx.action(crate::kanban::KanbanActions::UpdateListName {
                             list_id: list_id.clone(),
                             name: text.trim().to_string(),
                         });
-                        
+
                         // 关闭模态框
                         log!("EditListNameModal: 关闭模态框");
                         cx.action(crate::kanban::KanbanActions::CloseEditListNameModal);
@@ -159,10 +171,18 @@ impl Widget for EditListNameModal {
 }
 
 impl EditListNameModalRef {
-    pub fn set_data(&self, cx: &mut Cx, list_id: matrix_sdk::ruma::OwnedRoomId, current_name: &str) {
+    pub fn set_data(
+        &self,
+        cx: &mut Cx,
+        list_id: matrix_sdk::ruma::OwnedRoomId,
+        current_name: &str,
+    ) {
         if let Some(mut inner) = self.borrow_mut() {
             inner.list_id = Some(list_id);
-            inner.view.text_input(ids!(list_name_input)).set_text(cx, current_name);
+            inner
+                .view
+                .text_input(ids!(list_name_input))
+                .set_text(cx, current_name);
         }
     }
 }

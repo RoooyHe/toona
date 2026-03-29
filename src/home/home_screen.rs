@@ -88,7 +88,7 @@ live_design! {
                     home_page = <View> {
                         width: Fill, height: Fill
                         flow: Down
-                        
+
                         <MainDesktopUI> {}
                     }
 
@@ -476,24 +476,25 @@ impl Widget for HomeScreen {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         // 先让子widget处理事件
         self.view.handle_event(cx, event, scope);
-        
+
         // 然后处理创建看板按钮点击
         if let Event::Actions(actions) = event {
-            
             // 处理 CardDetailView 的关闭 Action
-            if let Some(crate::kanban::components::card_detail_view::CardDetailViewAction::Close) = 
-                actions.find_widget_action(self.view.widget_uid()).cast() 
+            if let Some(crate::kanban::components::card_detail_view::CardDetailViewAction::Close) =
+                actions.find_widget_action(self.view.widget_uid()).cast()
             {
                 log!("HomeScreen: Closing card detail view");
                 // TODO: 关闭卡片详情模态框
                 // self.view.modal(ids!(card_detail_modal)).close(cx);
             }
-            
+
             // 访问看板页面中的创建按钮
             let page_flip = self.view.page_flip(ids!(home_screen_page_flip));
-            let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(kanban_page_flip));
+            let kanban_page_flip = page_flip
+                .page_flip(ids!(kanban_page))
+                .page_flip(ids!(kanban_page_flip));
             let button_ref = kanban_page_flip.button(ids!(create_board_button));
-            
+
             if button_ref.clicked(actions) {
                 log!("Creating new kanban list...");
                 // 触发创建列表的 Action
@@ -501,9 +502,11 @@ impl Widget for HomeScreen {
                     name: "新列表".to_string(),
                 });
             }
-            
+
             // 处理返回按钮点击
-            let kanban_page_flip = page_flip.page_flip(ids!(kanban_page)).page_flip(ids!(kanban_page_flip));
+            let kanban_page_flip = page_flip
+                .page_flip(ids!(kanban_page))
+                .page_flip(ids!(kanban_page_flip));
             let back_button = kanban_page_flip.button(ids!(back_to_boards_button));
             if back_button.clicked(actions) {
                 log!("Back to boards list");
@@ -511,13 +514,12 @@ impl Widget for HomeScreen {
                 kanban_page_flip.set_active_page(cx, id!(boards_list_page));
                 self.view.redraw(cx);
             }
-            
+
             // 简化架构：不再需要 SelectBoard，直接显示所有列表
             // 处理 KanbanActions 会在 app.rs 中统一处理
         }
 
         if let Event::Actions(actions) = event {
-
             let app_state = scope.data.get_mut::<AppState>().unwrap();
             for action in actions {
                 if let Some(nav_action) = action.downcast_ref::<NavigationBarAction>() {

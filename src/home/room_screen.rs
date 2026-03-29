@@ -1280,10 +1280,10 @@ impl Widget for RoomScreen {
             // - The timeline is fully paginated
             // - A pagination request is already in progress
             // - The last pagination request failed (to avoid infinite retry loops)
-            if !tl_state.fully_paginated 
-                && !tl_state.pagination_in_progress 
-                && !tl_state.pagination_failed 
-                && !list.is_filling_viewport() 
+            if !tl_state.fully_paginated
+                && !tl_state.pagination_in_progress
+                && !tl_state.pagination_failed
+                && !list.is_filling_viewport()
             {
                 log!(
                     "Automatically paginating timeline to fill viewport for room {:?}",
@@ -1347,7 +1347,7 @@ impl RoomScreen {
                     // Reset pagination_failed when we receive new items
                     // This indicates that pagination is working and we can resume automatic pagination
                     tl.pagination_failed = false;
-                    
+
                     if new_items.is_empty() {
                         if !tl.items.is_empty() {
                             log!(

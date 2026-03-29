@@ -69,7 +69,7 @@ live_design! {
             }
 
             <View> { width: Fill, height: Fit }
-            
+
             // 下拉按钮
             dropdown_button = <Button> {
                 width: 30,
@@ -92,10 +92,10 @@ live_design! {
             height: Fit,
             flow: Right,
             spacing: 0,
-            
+
             // 标签卡片会动态生成
         }
-        
+
         // 空状态提示
         empty_label = <Label> {
             width: Fill,
@@ -129,12 +129,16 @@ pub struct TagChip {
 impl Widget for TagChip {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理删除按钮
             if self.view.button(ids!(remove_btn)).clicked(actions) {
                 if let Some(card_id) = &self.card_id {
-                    log!("TagChip: 删除标签 '{}' (ID: {})", self.tag_name, self.tag_id);
+                    log!(
+                        "TagChip: 删除标签 '{}' (ID: {})",
+                        self.tag_name,
+                        self.tag_id
+                    );
                     cx.action(crate::kanban::KanbanActions::RemoveTagFromCard {
                         card_id: card_id.clone(),
                         tag_id: self.tag_id.clone(),
@@ -147,20 +151,30 @@ impl Widget for TagChip {
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
         // 设置标签文本
         self.view.label(ids!(tag_text)).set_text(cx, &self.tag_name);
-        
+
         // 设置背景颜色
         if let Ok(color) = parse_hex_color(&self.tag_color) {
-            self.view.apply_over(cx, live! {
-                draw_bg: { color: (color) }
-            });
+            self.view.apply_over(
+                cx,
+                live! {
+                    draw_bg: { color: (color) }
+                },
+            );
         }
-        
+
         self.view.draw_walk(cx, scope, walk)
     }
 }
 
 impl TagChipRef {
-    pub fn set_data(&self, cx: &mut Cx, tag_id: String, tag_name: String, tag_color: String, card_id: matrix_sdk::ruma::OwnedRoomId) {
+    pub fn set_data(
+        &self,
+        cx: &mut Cx,
+        tag_id: String,
+        tag_name: String,
+        tag_color: String,
+        card_id: matrix_sdk::ruma::OwnedRoomId,
+    ) {
         if let Some(mut inner) = self.borrow_mut() {
             inner.tag_id = tag_id;
             inner.tag_name = tag_name;
@@ -185,7 +199,7 @@ pub struct TagSection {
 impl Widget for TagSection {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理下拉按钮
             if self.view.button(ids!(dropdown_button)).clicked(actions) {
@@ -205,28 +219,30 @@ impl Widget for TagSection {
         let tag_display_text = if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
             if let Some(selected_card_id) = &app_state.kanban_state.selected_card_id {
                 self.card_id = Some(selected_card_id.clone());
-                
+
                 if let Some(card) = app_state.kanban_state.cards.get(selected_card_id) {
                     self.space_id = Some(card.space_id.clone());
-                    
+
                     // 获取 Space 标签库
-                    let space_tags = app_state.kanban_state.space_tags
+                    let space_tags = app_state
+                        .kanban_state
+                        .space_tags
                         .get(&card.space_id)
                         .cloned()
                         .unwrap_or_default();
-                    
-                    log!("TagSection: Found card with {} tags, space has {} tags", 
-                        card.tags.len(), space_tags.len());
-                    
+
                     // 根据标签 ID 查找标签详情并生成显示文本
-                    let tag_names: Vec<String> = card.tags.iter()
+                    let tag_names: Vec<String> = card
+                        .tags
+                        .iter()
                         .filter_map(|tag_id| {
-                            space_tags.iter()
+                            space_tags
+                                .iter()
                                 .find(|t| &t.id == tag_id)
                                 .map(|t| t.name.clone())
                         })
                         .collect();
-                    
+
                     if tag_names.is_empty() {
                         None
                     } else {
@@ -241,17 +257,19 @@ impl Widget for TagSection {
         } else {
             None
         };
-        
+
         // 设置显示内容
         if let Some(text) = tag_display_text {
             // 临时使用简单的文本显示，后续会改为 TagChip
             self.view.label(ids!(empty_label)).set_text(cx, &text);
             self.view.label(ids!(empty_label)).set_visible(cx, true);
         } else {
-            self.view.label(ids!(empty_label)).set_text(cx, "暂无标签，点击 ▼ 添加标签");
+            self.view
+                .label(ids!(empty_label))
+                .set_text(cx, "暂无标签，点击 ▼ 添加标签");
             self.view.label(ids!(empty_label)).set_visible(cx, true);
         }
-        
+
         self.view.draw_walk(cx, scope, walk)
     }
 }
@@ -259,14 +277,19 @@ impl Widget for TagSection {
 // 辅助函数：解析十六进制颜色
 fn parse_hex_color(hex: &str) -> Result<Vec4, String> {
     let hex = hex.trim_start_matches('#');
-    
+
     if hex.len() != 6 {
         return Err(format!("Invalid hex color: {}", hex));
     }
-    
+
     let r = u8::from_str_radix(&hex[0..2], 16).map_err(|e| e.to_string())?;
     let g = u8::from_str_radix(&hex[2..4], 16).map_err(|e| e.to_string())?;
     let b = u8::from_str_radix(&hex[4..6], 16).map_err(|e| e.to_string())?;
-    
-    Ok(vec4(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0))
+
+    Ok(vec4(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        1.0,
+    ))
 }

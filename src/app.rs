@@ -17,9 +17,7 @@ use crate::{
     join_leave_room_modal::{
         JoinLeaveModalKind, JoinLeaveRoomModalAction, JoinLeaveRoomModalWidgetRefExt,
     },
-    kanban::{
-        KanbanActions, KanbanAppState,
-    },
+    kanban::{KanbanActions, KanbanAppState},
     kanban::components::edit_list_name_modal::EditListNameModalWidgetRefExt,
     kanban::components::card_modal::CardDetailModalWidgetRefExt,
     login::login_screen::LoginAction,
@@ -157,14 +155,14 @@ live_design! {
 
                         // Show the card detail modal for kanban cards
                         card_detail_modal = <CardDetailModal> {}
-                        
+
                         // Show the tag management modal for kanban cards
                         tag_management_modal = <Modal> {
                             content: {
                                 tag_management_modal_inner = <TagManagementModal> {}
                             }
                         }
-                        
+
                         // Show the edit list name modal for kanban lists
                         edit_list_name_modal = <Modal> {
                             content: {
@@ -298,7 +296,7 @@ impl MatchEvent for App {
         for action in actions {
             if let Some(kanban_action) = action.downcast_ref::<KanbanActions>() {
                 self.handle_kanban_action(cx, kanban_action.clone());
-                self.ui.redraw(cx);
+                cx.redraw_all();
                 continue;
             }
 
@@ -553,14 +551,26 @@ impl MatchEvent for App {
             }
 
             // Handle card detail modal close button
-            if self.ui.button(ids!(card_detail_modal.modal.content.modal_header.close_button)).clicked(actions) {
+            if self
+                .ui
+                .button(ids!(
+                    card_detail_modal.modal.content.modal_header.close_button
+                ))
+                .clicked(actions)
+            {
                 self.ui.card_detail_modal(ids!(card_detail_modal)).close(cx);
                 continue;
             }
 
             // Handle edit list name modal buttons
-            if self.ui.button(ids!(edit_list_name_modal_inner.save_button)).clicked(actions)
-                || self.ui.button(ids!(edit_list_name_modal_inner.cancel_button)).clicked(actions)
+            if self
+                .ui
+                .button(ids!(edit_list_name_modal_inner.save_button))
+                .clicked(actions)
+                || self
+                    .ui
+                    .button(ids!(edit_list_name_modal_inner.cancel_button))
+                    .clicked(actions)
             {
                 self.ui.modal(ids!(edit_list_name_modal)).close(cx);
                 continue;
@@ -783,26 +793,28 @@ impl App {
             KanbanActions::CardLoaded(card) => {
                 // 卡片已加载
                 log!("CardLoaded: card_id='{}', title='{}'", card.id, card.title);
-                
+
                 // 添加卡片到 state
                 let space_id = card.space_id.clone();
                 let card_id = card.id.clone();
                 state.upsert_card(card.clone());
-                
+
                 // 添加卡片 ID 到列表的 card_ids
                 if let Some(list) = state.lists.get_mut(&space_id) {
                     if !list.card_ids.contains(&card.id) {
                         list.card_ids.push(card.id);
                     }
                 }
-                
+
                 // 如果当前打开的模态框是这张卡片，强制重绘模态框
                 if state.selected_card_id.as_ref() == Some(&card_id) {
                     log!("🔄 Forcing modal redraw for updated card {}", card_id);
                     // 强制重绘模态框内容
-                    self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                    self.ui
+                        .view(ids!(card_detail_modal.modal.content))
+                        .redraw(cx);
                 }
-                
+
                 self.ui.redraw(cx);
             }
 
@@ -817,37 +829,41 @@ impl App {
             KanbanActions::UpdateListName { list_id, name } => {
                 // 更新列表名称
                 log!("UpdateListName: list_id='{}', name='{}'", list_id, name);
-                
+
                 // 使用 update_list_name 方法只更新名称，保留卡片
                 state.update_list_name(&list_id, name.clone());
                 log!("✅ UpdateListName: 本地状态已更新，列表名称改为 '{}'", name);
-                
+
                 // 同步到 Matrix 服务器
                 if get_client().is_some() {
-                    submit_async_request(MatrixRequest::UpdateKanbanListName {
-                        list_id,
-                        name,
-                    });
+                    submit_async_request(MatrixRequest::UpdateKanbanListName { list_id, name });
                 }
-                
+
                 // 强制重绘整个 UI 以更新列表名称显示
                 self.ui.redraw(cx);
                 cx.redraw_all();
             }
-            
-            KanbanActions::ShowEditListName { list_id, current_name } => {
+
+            KanbanActions::ShowEditListName {
+                list_id,
+                current_name,
+            } => {
                 // 显示编辑列表名称模态框
-                log!("ShowEditListName: list_id='{}', current_name='{}'", list_id, current_name);
-                
+                log!(
+                    "ShowEditListName: list_id='{}', current_name='{}'",
+                    list_id,
+                    current_name
+                );
+
                 // 设置数据
                 self.ui
                     .edit_list_name_modal(ids!(edit_list_name_modal_inner))
                     .set_data(cx, list_id, &current_name);
-                
+
                 // 打开模态框
                 self.ui.modal(ids!(edit_list_name_modal)).open(cx);
             }
-            
+
             KanbanActions::CloseEditListNameModal => {
                 // 关闭编辑列表名称模态框
                 log!("CloseEditListNameModal: 关闭模态框");
@@ -856,7 +872,11 @@ impl App {
 
             KanbanActions::CreateCard { space_id, title } => {
                 // 在列表中创建新卡片
-                log!("🎯 Received CreateCard action: space_id='{}', title='{}'", space_id, title);
+                log!(
+                    "🎯 Received CreateCard action: space_id='{}', title='{}'",
+                    space_id,
+                    title
+                );
                 if get_client().is_some() {
                     log!("🎯 Submitting CreateKanbanCard request to worker thread...");
                     submit_async_request(MatrixRequest::CreateKanbanCard { space_id, title });
@@ -870,7 +890,7 @@ impl App {
             KanbanActions::ShowCardDetail { card_id } => {
                 // 显示卡片详情
                 log!("ShowCardDetail: card_id='{}'", card_id);
-                
+
                 // 重新从 Matrix 加载完整的卡片数据（包括 todos）
                 // 这确保即使重启后也能看到最新的数据
                 if get_client().is_some() {
@@ -878,19 +898,25 @@ impl App {
                     if let Some(card) = state.cards.get(&card_id) {
                         let space_id = card.space_id.clone();
                         log!("ShowCardDetail: Found card, space_id={}", space_id);
-                        log!("🔄 Reloading card {} from Matrix to get fresh data", card_id);
+                        log!(
+                            "🔄 Reloading card {} from Matrix to get fresh data",
+                            card_id
+                        );
                         submit_async_request(MatrixRequest::LoadCard {
                             card_id: card_id.clone(),
                             space_id: space_id.clone(),
                         });
-                        
+
                         // 加载 Space 标签库
-                        log!("ShowCardDetail: Requesting to load space tags for space {}", space_id);
+                        log!(
+                            "ShowCardDetail: Requesting to load space tags for space {}",
+                            space_id
+                        );
                         submit_async_request(MatrixRequest::LoadSpaceTags { space_id });
                     } else {
                         log!("ShowCardDetail: Card not found in state!");
                     }
-                    
+
                     // 加载活动记录
                     submit_async_request(MatrixRequest::LoadCardActivities {
                         card_id: card_id.clone(),
@@ -899,14 +925,14 @@ impl App {
                 } else {
                     log!("ShowCardDetail: No Matrix client available!");
                 }
-                
+
                 // 存储当前要显示的卡片 ID
                 state.selected_card_id = Some(card_id);
                 log!("ShowCardDetail: Set selected_card_id in state");
-                
+
                 // 打开卡片详情模态框
                 self.ui.card_detail_modal(ids!(card_detail_modal)).open(cx);
-                
+
                 self.ui.redraw(cx);
             }
 
@@ -920,31 +946,38 @@ impl App {
                     let old_space_id = card.space_id.clone();
                     card.space_id = target_space_id.clone();
                     card.position = position;
-                    
+
                     // 从旧列表移除
                     if let Some(old_list) = state.lists.get_mut(&old_space_id) {
                         old_list.card_ids.retain(|id| id != &card_id);
                     }
-                    
+
                     // 添加到新列表
                     if let Some(new_list) = state.lists.get_mut(&target_space_id) {
                         if !new_list.card_ids.contains(&card_id) {
                             new_list.card_ids.push(card_id);
                         }
                     }
-                    
+
                     self.ui.redraw(cx);
                 }
             }
 
             KanbanActions::UpdateCardStatus { card_id, status } => {
-                log!("UpdateCardStatus: card_id='{}', status={:?}", card_id, status);
-                
+                log!(
+                    "UpdateCardStatus: card_id='{}', status={:?}",
+                    card_id,
+                    status
+                );
+
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.status = status;
                     card.touch();
-                    log!("✅ UpdateCardStatus: Local state updated, status={:?}", card.status);
-                    
+                    log!(
+                        "✅ UpdateCardStatus: Local state updated, status={:?}",
+                        card.status
+                    );
+
                     // 保存到 Matrix
                     if let Some(_client) = get_client() {
                         log!("💾 UpdateCardStatus: Submitting SaveCardMetadata request");
@@ -954,22 +987,25 @@ impl App {
                     } else {
                         log!("⚠️ UpdateCardStatus: No Matrix client available");
                     }
-                    
+
                     // 触发 UI 重绘
                     self.ui.redraw(cx);
                 } else {
                     log!("❌ UpdateCardStatus: Card not found in state");
                 }
             }
-            
+
             KanbanActions::UpdateCardTitle { card_id, title } => {
                 // 更新卡片标题
                 log!("UpdateCardTitle: card_id='{}', title='{}'", card_id, title);
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.title = title.clone();
                     card.touch(); // 更新 updated_at 时间戳
-                    log!("✅ UpdateCardTitle: 本地状态已更新，卡片标题改为 '{}'", title);
-                    
+                    log!(
+                        "✅ UpdateCardTitle: 本地状态已更新，卡片标题改为 '{}'",
+                        title
+                    );
+
                     // 同步到 Matrix 服务器（传递完整的卡片数据以便保存元数据）
                     if get_client().is_some() {
                         let card_clone = card.clone();
@@ -979,7 +1015,7 @@ impl App {
                             card: card_clone,
                         });
                     }
-                    
+
                     self.ui.redraw(cx);
                 }
             }
@@ -989,12 +1025,16 @@ impl App {
                 description,
             } => {
                 // 更新卡片描述
-                log!("UpdateCardDescription: card_id='{}', description='{:?}'", card_id, description);
+                log!(
+                    "UpdateCardDescription: card_id='{}', description='{:?}'",
+                    card_id,
+                    description
+                );
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.description = description.clone();
                     card.touch(); // 更新 updated_at 时间戳
                     log!("✅ UpdateCardDescription: 本地状态已更新");
-                    
+
                     // 同步到 Matrix 服务器（传递完整的卡片数据以便保存元数据）
                     if get_client().is_some() {
                         let card_clone = card.clone();
@@ -1004,7 +1044,7 @@ impl App {
                             card: card_clone,
                         });
                     }
-                    
+
                     self.ui.redraw(cx);
                 }
             }
@@ -1021,166 +1061,195 @@ impl App {
                 }
                 // TODO: 同步到 Matrix 服务器（删除 Room）
             }
-            
+
             // ========== Phase 2: TodoList Action Handlers ==========
-            
             KanbanActions::AddTodo { card_id, text } => {
                 log!("📝 AddTodo: card_id='{}', text='{}'", card_id, text);
-                
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     let new_todo = crate::kanban::state::kanban_state::TodoItem::new(text.clone());
                     card.todos.push(new_todo);
                     card.touch();
                     log!("✅ Added todo in memory immediately");
-                    
+
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                        self.ui
+                            .view(ids!(card_detail_modal.modal.content))
+                            .redraw(cx);
                     }
                     self.ui.redraw(cx);
-                    
+
                     // 异步保存到 Matrix（传递完整的todos列表）
                     if get_client().is_some() {
                         let todos_clone = card.todos.clone();
-                        submit_async_request(MatrixRequest::SaveCardTodos { 
-                            card_id: card_id.clone(), 
-                            todos: todos_clone 
+                        submit_async_request(MatrixRequest::SaveCardTodos {
+                            card_id: card_id.clone(),
+                            todos: todos_clone,
                         });
                     }
                 }
             }
-            
+
             KanbanActions::ToggleTodo { card_id, todo_id } => {
-                log!("✅ ToggleTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
-                
+                log!(
+                    "✅ ToggleTodo: card_id='{}', todo_id='{}'",
+                    card_id,
+                    todo_id
+                );
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
                         todo.completed = !todo.completed;
                         card.touch();
                         log!("✅ Toggled todo in memory immediately");
-                        
+
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                            self.ui
+                                .view(ids!(card_detail_modal.modal.content))
+                                .redraw(cx);
                         }
                         self.ui.redraw(cx);
-                        
+
                         // 异步保存到 Matrix
                         if get_client().is_some() {
                             let todos_clone = card.todos.clone();
-                            submit_async_request(MatrixRequest::SaveCardTodos { 
-                                card_id: card_id.clone(), 
-                                todos: todos_clone 
+                            submit_async_request(MatrixRequest::SaveCardTodos {
+                                card_id: card_id.clone(),
+                                todos: todos_clone,
                             });
                         }
                     }
                 }
             }
-            
-            KanbanActions::UpdateTodoText { card_id, todo_id, text } => {
-                log!("✏️ UpdateTodoText: card_id='{}', todo_id='{}', text='{}'", card_id, todo_id, text);
-                
+
+            KanbanActions::UpdateTodoText {
+                card_id,
+                todo_id,
+                text,
+            } => {
+                log!(
+                    "✏️ UpdateTodoText: card_id='{}', todo_id='{}', text='{}'",
+                    card_id,
+                    todo_id,
+                    text
+                );
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     if let Some(todo) = card.todos.iter_mut().find(|t| t.id == todo_id) {
                         todo.text = text.clone();
                         card.touch();
                         log!("✅ Updated todo text in memory immediately");
-                        
+
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                            self.ui
+                                .view(ids!(card_detail_modal.modal.content))
+                                .redraw(cx);
                         }
                         self.ui.redraw(cx);
-                        
+
                         // 异步保存到 Matrix
                         if get_client().is_some() {
                             let todos_clone = card.todos.clone();
-                            submit_async_request(MatrixRequest::SaveCardTodos { 
-                                card_id: card_id.clone(), 
-                                todos: todos_clone 
+                            submit_async_request(MatrixRequest::SaveCardTodos {
+                                card_id: card_id.clone(),
+                                todos: todos_clone,
                             });
                         }
                     }
                 }
             }
-            
+
             KanbanActions::DeleteTodo { card_id, todo_id } => {
-                log!("🗑️ DeleteTodo: card_id='{}', todo_id='{}'", card_id, todo_id);
-                
+                log!(
+                    "🗑️ DeleteTodo: card_id='{}', todo_id='{}'",
+                    card_id,
+                    todo_id
+                );
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.todos.retain(|t| t.id != todo_id);
                     card.touch();
                     log!("✅ Deleted todo in memory immediately");
-                    
+
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                        self.ui
+                            .view(ids!(card_detail_modal.modal.content))
+                            .redraw(cx);
                     }
                     self.ui.redraw(cx);
-                    
+
                     // 异步保存到 Matrix
                     if get_client().is_some() {
                         let todos_clone = card.todos.clone();
-                        submit_async_request(MatrixRequest::SaveCardTodos { 
-                            card_id: card_id.clone(), 
-                            todos: todos_clone 
+                        submit_async_request(MatrixRequest::SaveCardTodos {
+                            card_id: card_id.clone(),
+                            todos: todos_clone,
                         });
                     }
                 }
             }
-            
+
             // ========== Phase 3: Tags Action Handlers ==========
-            
             KanbanActions::AddTag { card_id, tag } => {
                 log!("🏷️ AddTag: card_id='{}', tag='{}'", card_id, tag);
-                
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     if !card.tags.contains(&tag) {
                         card.tags.push(tag.clone());
                         card.touch();
                         log!("✅ Added tag '{}' in memory immediately", tag);
-                        
+
                         // 如果模态框打开的是这张卡片，立即重绘
                         if state.selected_card_id.as_ref() == Some(&card_id) {
                             log!("🔄 Forcing immediate modal redraw");
-                            self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                            self.ui
+                                .view(ids!(card_detail_modal.modal.content))
+                                .redraw(cx);
                         }
                         self.ui.redraw(cx);
-                        
+
                         // 异步保存到 Matrix（传递完整的卡片数据）
                         if get_client().is_some() {
                             let card_clone = card.clone();
-                            submit_async_request(MatrixRequest::SaveCardMetadata { card: card_clone });
+                            submit_async_request(MatrixRequest::SaveCardMetadata {
+                                card: card_clone,
+                            });
                         }
                     }
                 }
             }
-            
+
             KanbanActions::RemoveTag { card_id, tag } => {
                 log!("🗑️ RemoveTag: card_id='{}', tag='{}'", card_id, tag);
-                
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.tags.retain(|t| t != &tag);
                     card.touch();
                     log!("✅ Removed tag '{}' in memory immediately", tag);
-                    
+
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                        self.ui
+                            .view(ids!(card_detail_modal.modal.content))
+                            .redraw(cx);
                     }
                     self.ui.redraw(cx);
-                    
+
                     // 异步保存到 Matrix（传递完整的卡片数据）
                     if get_client().is_some() {
                         let card_clone = card.clone();
@@ -1188,25 +1257,30 @@ impl App {
                     }
                 }
             }
-            
+
             // ========== Phase 4: EndTime Action Handlers ==========
-            
             KanbanActions::SetEndTime { card_id, end_time } => {
-                log!("⏰ SetEndTime: card_id='{}', end_time={}", card_id, end_time);
-                
+                log!(
+                    "⏰ SetEndTime: card_id='{}', end_time={}",
+                    card_id,
+                    end_time
+                );
+
                 // 立即更新内存中的 state（乐观更新）
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.end_time = Some(end_time);
                     card.touch();
                     log!("✅ Updated end_time in memory immediately");
-                    
+
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                        self.ui
+                            .view(ids!(card_detail_modal.modal.content))
+                            .redraw(cx);
                     }
                     self.ui.redraw(cx);
-                    
+
                     // 异步保存到 Matrix（传递完整的卡片数据）
                     if get_client().is_some() {
                         let card_clone = card.clone();
@@ -1214,23 +1288,25 @@ impl App {
                     }
                 }
             }
-            
+
             KanbanActions::ClearEndTime { card_id } => {
                 log!("🗑️ ClearEndTime: card_id='{}'", card_id);
-                
+
                 // 立即更新内存中的 state
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.end_time = None;
                     card.touch();
                     log!("✅ Cleared end_time in memory immediately");
-                    
+
                     // 如果模态框打开的是这张卡片，立即重绘
                     if state.selected_card_id.as_ref() == Some(&card_id) {
                         log!("🔄 Forcing immediate modal redraw");
-                        self.ui.view(ids!(card_detail_modal.modal.content)).redraw(cx);
+                        self.ui
+                            .view(ids!(card_detail_modal.modal.content))
+                            .redraw(cx);
                     }
                     self.ui.redraw(cx);
-                    
+
                     // 异步保存到 Matrix（传递完整的卡片数据）
                     if get_client().is_some() {
                         let card_clone = card.clone();
@@ -1238,72 +1314,203 @@ impl App {
                     }
                 }
             }
-            
+
             // ========== Phase 5: Activities Action Handlers ==========
-            
             KanbanActions::AddComment { card_id, text } => {
                 log!("💬 AddComment: card_id='{}', text='{}'", card_id, text);
+
+                // 获取当前用户 ID
+                let user_id = current_user_id()
+                    .map(|u| u.to_string())
+                    .unwrap_or_else(|| "Unknown User".to_string());
+
+                // 乐观更新：立即在本地显示新评论
+                let optimistic_activity = crate::kanban::state::kanban_state::CardActivity {
+                    id: format!("local_{}", uuid::Uuid::new_v4()),
+                    activity_type: crate::kanban::state::kanban_state::ActivityType::Comment,
+                    text: text.clone(),
+                    metadata: None,
+                    created_at: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                    user_id,
+                };
+
+                if let Some(activities) = state.activities.get_mut(&card_id) {
+                    activities.push(optimistic_activity);
+                    log!(
+                        "💬 Added optimistic comment to local activities, total: {}",
+                        activities.len()
+                    );
+                } else {
+                    state
+                        .activities
+                        .insert(card_id.clone(), vec![optimistic_activity]);
+                    log!("💬 Created new activities list with optimistic comment");
+                }
+
+                // 触发 Modal 内容重绘
+                cx.redraw_all();
+
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::AddCardComment { card_id, text });
                 }
             }
-            
-            KanbanActions::ActivitiesLoaded { card_id, activities } => {
-                log!("📖 ActivitiesLoaded: card_id='{}', count={}", card_id, activities.len());
+
+            KanbanActions::ActivitiesLoaded {
+                card_id,
+                activities,
+            } => {
+                log!(
+                    "📖 ActivitiesLoaded: card_id='{}', count={}",
+                    card_id,
+                    activities.len()
+                );
                 for activity in &activities {
-                    log!("  - Activity: type={:?}, user={}, text={}", 
-                        activity.activity_type, activity.user_id, activity.text);
+                    log!(
+                        "  - Activity: id={}, type={:?}, user={}, text={}",
+                        activity.id,
+                        activity.activity_type,
+                        activity.user_id,
+                        activity.text
+                    );
                 }
-                state.activities.insert(card_id, activities);
-                
-                // 触发 UI 重绘以显示加载的活动
+
+                // 获取现有的本地活动（用于合并）
+                let existing_activities =
+                    state.activities.get(&card_id).cloned().unwrap_or_default();
+
+                log!(
+                    "📖 ActivitiesLoaded: existing activities count: {}",
+                    existing_activities.len()
+                );
+
+                // 合并：保留本地活动（ID 以 "local_" 开头的），添加服务器活动
+                let mut merged_activities = Vec::new();
+
+                // 首先添加所有服务器返回的活动
+                for activity in activities {
+                    // 检查是否已存在（通过 ID）
+                    if !merged_activities.iter().any(
+                        |a: &crate::kanban::state::kanban_state::CardActivity| a.id == activity.id,
+                    ) {
+                        log!("  + Adding server activity: id={}", activity.id);
+                        merged_activities.push(activity);
+                    }
+                }
+
+                // 然后添加本地独有的活动（乐观更新）
+                for activity in existing_activities {
+                    if activity.id.starts_with("local_") {
+                        // 检查服务器是否已经有相似的活动（通过文本和时间戳判断）
+                        let is_duplicate = merged_activities.iter().any(|a| {
+                            a.text == activity.text
+                                && a.activity_type == activity.activity_type
+                                && (a.created_at as i64 - activity.created_at as i64).abs() < 5
+                        });
+
+                        if !is_duplicate {
+                            log!("  + Keeping local activity: id={}", activity.id);
+                            merged_activities.push(activity);
+                        } else {
+                            log!(
+                                "  - Removing local activity (found similar on server): id={}",
+                                activity.id
+                            );
+                        }
+                    }
+                }
+
+                log!(
+                    "📖 ActivitiesLoaded: merged activities count: {}",
+                    merged_activities.len()
+                );
+
+                // 按时间排序（最新的在最后）
+                merged_activities.sort_by_key(|a| a.created_at);
+
+                state.activities.insert(card_id.clone(), merged_activities);
+
+                // 触发 Modal 内容重绘以显示加载的活动
+                log!("🔄 Triggering UI redraw after ActivitiesLoaded");
                 self.ui.redraw(cx);
+                cx.redraw_all();
             }
-            
+
             // ========== Space 标签库管理 Action Handlers ==========
-            
             KanbanActions::LoadSpaceTags { space_id } => {
                 log!("📚 LoadSpaceTags: space_id='{}'", space_id);
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::LoadSpaceTags { space_id });
                 }
             }
-            
+
             KanbanActions::SpaceTagsLoaded { space_id, tags } => {
-                log!("SpaceTagsLoaded: space_id='{}', count={}", space_id, tags.len());
+                log!(
+                    "SpaceTagsLoaded: space_id='{}', count={}",
+                    space_id,
+                    tags.len()
+                );
                 for tag in &tags {
-                    log!("  - Tag: id={}, name={}, color={}", tag.id, tag.name, tag.color);
+                    log!(
+                        "  - Tag: id={}, name={}, color={}",
+                        tag.id,
+                        tag.name,
+                        tag.color
+                    );
                 }
                 state.space_tags.insert(space_id, tags);
-                
+
                 // 触发 UI 重绘以显示加载的标签
                 self.ui.redraw(cx);
             }
-            
-            KanbanActions::CreateSpaceTag { space_id, name, color } => {
-                log!("➕ CreateSpaceTag: space_id='{}', name='{}', color='{}'", space_id, name, color);
+
+            KanbanActions::CreateSpaceTag {
+                space_id,
+                name,
+                color,
+            } => {
+                log!(
+                    "➕ CreateSpaceTag: space_id='{}', name='{}', color='{}'",
+                    space_id,
+                    name,
+                    color
+                );
                 if get_client().is_some() {
-                    submit_async_request(MatrixRequest::CreateSpaceTag { space_id, name, color });
+                    submit_async_request(MatrixRequest::CreateSpaceTag {
+                        space_id,
+                        name,
+                        color,
+                    });
                 }
             }
-            
+
             KanbanActions::UpdateSpaceTag { space_id, tag } => {
-                log!("✏️ UpdateSpaceTag: space_id='{}', tag_id='{}'", space_id, tag.id);
+                log!(
+                    "✏️ UpdateSpaceTag: space_id='{}', tag_id='{}'",
+                    space_id,
+                    tag.id
+                );
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::UpdateSpaceTag { space_id, tag });
                 }
             }
-            
+
             KanbanActions::DeleteSpaceTag { space_id, tag_id } => {
-                log!("🗑️ DeleteSpaceTag: space_id='{}', tag_id='{}'", space_id, tag_id);
+                log!(
+                    "🗑️ DeleteSpaceTag: space_id='{}', tag_id='{}'",
+                    space_id,
+                    tag_id
+                );
                 if get_client().is_some() {
                     submit_async_request(MatrixRequest::DeleteSpaceTag { space_id, tag_id });
                 }
             }
-            
+
             KanbanActions::AddTagToCard { card_id, tag_id } => {
                 log!("AddTagToCard: card_id='{}', tag_id='{}'", card_id, tag_id);
-                
+
                 // 在内存中更新卡片
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     log!("AddTagToCard: Found card, current tags: {:?}", card.tags);
@@ -1311,7 +1518,7 @@ impl App {
                         card.tags.push(tag_id.clone());
                         card.touch();
                         log!("AddTagToCard: Added tag, new tags: {:?}", card.tags);
-                        
+
                         // 保存到 Matrix
                         if get_client().is_some() {
                             log!("AddTagToCard: Submitting SaveCardMetadata request");
@@ -1319,7 +1526,7 @@ impl App {
                                 card: card.clone(),
                             });
                         }
-                        
+
                         // 触发 UI 重绘以显示新标签
                         self.ui.redraw(cx);
                     } else {
@@ -1329,30 +1536,43 @@ impl App {
                     log!("AddTagToCard: Card not found!");
                 }
             }
-            
+
             KanbanActions::RemoveTagFromCard { card_id, tag_id } => {
-                log!("RemoveTagFromCard: card_id='{}', tag_id='{}'", card_id, tag_id);
-                
+                log!(
+                    "RemoveTagFromCard: card_id='{}', tag_id='{}'",
+                    card_id,
+                    tag_id
+                );
+
                 // 在内存中更新卡片
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     card.tags.retain(|t| t != &tag_id);
                     card.touch();
-                    
+
                     // 保存到 Matrix
                     if get_client().is_some() {
                         submit_async_request(MatrixRequest::SaveCardMetadata {
                             card: card.clone(),
                         });
                     }
-                    
+
                     // 触发 UI 重绘
                     self.ui.redraw(cx);
                 }
             }
-            
-            KanbanActions::AddTagToCardByName { card_id, space_id, tag_name } => {
-                log!("AddTagToCardByName: card_id='{}', space_id='{}', tag_name='{}'", card_id, space_id, tag_name);
-                
+
+            KanbanActions::AddTagToCardByName {
+                card_id,
+                space_id,
+                tag_name,
+            } => {
+                log!(
+                    "AddTagToCardByName: card_id='{}', space_id='{}', tag_name='{}'",
+                    card_id,
+                    space_id,
+                    tag_name
+                );
+
                 // 从标签库中查找标签
                 if let Some(tags) = state.space_tags.get(&space_id) {
                     if let Some(tag) = tags.iter().find(|t| t.name == tag_name) {
@@ -1361,101 +1581,127 @@ impl App {
                             if !card.tags.contains(&tag.id) {
                                 card.tags.push(tag.id.clone());
                                 card.touch();
-                                
+
                                 // 保存到 Matrix
                                 if get_client().is_some() {
                                     submit_async_request(MatrixRequest::SaveCardMetadata {
                                         card: card.clone(),
                                     });
                                 }
-                                
+
                                 // 触发 UI 重绘
                                 self.ui.redraw(cx);
                             }
                         }
                     } else {
-                        log!("AddTagToCardByName: Tag '{}' not found in space tags", tag_name);
+                        log!(
+                            "AddTagToCardByName: Tag '{}' not found in space tags",
+                            tag_name
+                        );
                     }
                 } else {
                     log!("AddTagToCardByName: No tags found for space '{}'", space_id);
                 }
             }
-            
+
             KanbanActions::ShowTagManagementModal { space_id, card_id } => {
-                log!("ShowTagManagementModal: space_id='{}', card_id='{}'", space_id, card_id);
-                
+                log!(
+                    "ShowTagManagementModal: space_id='{}', card_id='{}'",
+                    space_id,
+                    card_id
+                );
+
                 // 打开标签管理模态框（数据会在 draw_walk 中从 AppState 获取）
                 self.ui.modal(ids!(tag_management_modal)).open(cx);
             }
-            
+
             KanbanActions::CloseTagManagementModal => {
                 log!("CloseTagManagementModal");
-                
+
                 // 关闭标签管理模态框
                 self.ui.modal(ids!(tag_management_modal)).close(cx);
-                
+
                 // 重新加载标签库以显示新创建的标签
                 if let Some(selected_card_id) = &state.selected_card_id {
                     if let Some(card) = state.cards.get(selected_card_id) {
-                        submit_async_request(MatrixRequest::LoadSpaceTags { 
-                            space_id: card.space_id.clone() 
+                        submit_async_request(MatrixRequest::LoadSpaceTags {
+                            space_id: card.space_id.clone(),
                         });
                     }
                 }
             }
-            
+
             // ========== Phase 6: Drag and Drop Action Handlers ==========
-            
-            KanbanActions::StartDragCard { card_id, space_id, position } => {
-                log!("🎯 StartDragCard: card_id='{}', space_id='{}', position={}", card_id, space_id, position);
-                
+            KanbanActions::StartDragCard {
+                card_id,
+                space_id,
+                position,
+            } => {
+                log!(
+                    "🎯 StartDragCard: card_id='{}', space_id='{}', position={}",
+                    card_id,
+                    space_id,
+                    position
+                );
+
                 // 创建拖拽状态
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_millis() as u64;
-                
+
                 state.drag_state = Some(crate::kanban::state::kanban_state::DragState {
                     card_id: card_id.clone(),
                     source_space_id: space_id.clone(),
                     source_position: position,
                     start_time: now,
                 });
-                
+
                 log!("✅ Drag state created");
                 self.ui.redraw(cx);
             }
-            
-            KanbanActions::DropCard { card_id, target_space_id, target_position } => {
-                log!("🎯 DropCard: card_id='{}', target_space_id='{}', target_position={}", 
-                    card_id, target_space_id, target_position);
-                
+
+            KanbanActions::DropCard {
+                card_id,
+                target_space_id,
+                target_position,
+            } => {
+                log!(
+                    "🎯 DropCard: card_id='{}', target_space_id='{}', target_position={}",
+                    card_id,
+                    target_space_id,
+                    target_position
+                );
+
                 // 获取拖拽状态
                 let drag_state = state.drag_state.take();
-                
+
                 if let Some(drag_state) = drag_state {
                     let source_space_id = drag_state.source_space_id.clone();
                     let source_position = drag_state.source_position;
-                    
+
                     // 检查是否真的移动了
                     let is_same_space = source_space_id == target_space_id;
                     let position_diff = (source_position - target_position).abs();
-                    
+
                     if is_same_space && position_diff < 0.1 {
                         log!("DropCard: Card dropped at same position, ignoring");
                         return;
                     }
-                    
+
                     // 乐观更新：立即更新本地状态
                     if let Some(card) = state.cards.get_mut(&card_id) {
                         let old_space_id = card.space_id.clone();
                         card.space_id = target_space_id.clone();
                         card.position = target_position;
                         card.touch();
-                        
-                        log!("✅ Updated card in local state: space_id={}, position={}", 
-                            target_space_id, target_position);
-                        
+
+                        log!(
+                            "✅ Updated card in local state: space_id={}, position={}",
+                            target_space_id,
+                            target_position
+                        );
+
                         // 更新列表的 card_ids
                         if old_space_id != target_space_id {
                             // 从旧列表移除
@@ -1463,7 +1709,7 @@ impl App {
                                 old_list.card_ids.retain(|id| id != &card_id);
                                 log!("✅ Removed card from old list {}", old_space_id);
                             }
-                            
+
                             // 添加到新列表
                             if let Some(new_list) = state.lists.get_mut(&target_space_id) {
                                 if !new_list.card_ids.contains(&card_id) {
@@ -1472,10 +1718,10 @@ impl App {
                                 }
                             }
                         }
-                        
+
                         // 触发 UI 重绘
                         self.ui.redraw(cx);
-                        
+
                         // 异步同步到 Matrix
                         if get_client().is_some() {
                             let card_clone = card.clone();
@@ -1493,31 +1739,40 @@ impl App {
                     log!("⚠️ DropCard: No drag state found");
                 }
             }
-            
+
             KanbanActions::CancelDragCard => {
                 log!("❌ CancelDragCard");
-                
+
                 // 清除拖拽状态
                 state.drag_state = None;
                 self.ui.redraw(cx);
             }
-            
-            KanbanActions::MoveCardFailed { card_id, original_space_id, original_position, error } => {
-                log!("❌ MoveCardFailed: card_id='{}', error='{}'", card_id, error);
-                
+
+            KanbanActions::MoveCardFailed {
+                card_id,
+                original_space_id,
+                original_position,
+                error,
+            } => {
+                log!(
+                    "❌ MoveCardFailed: card_id='{}', error='{}'",
+                    card_id,
+                    error
+                );
+
                 // 回滚本地状态
                 if let Some(card) = state.cards.get_mut(&card_id) {
                     let current_space_id = card.space_id.clone();
                     card.space_id = original_space_id.clone();
                     card.position = original_position;
-                    
+
                     // 更新列表的 card_ids
                     if current_space_id != original_space_id {
                         // 从当前列表移除
                         if let Some(current_list) = state.lists.get_mut(&current_space_id) {
                             current_list.card_ids.retain(|id| id != &card_id);
                         }
-                        
+
                         // 添加回原列表
                         if let Some(original_list) = state.lists.get_mut(&original_space_id) {
                             if !original_list.card_ids.contains(&card_id) {
@@ -1525,11 +1780,11 @@ impl App {
                             }
                         }
                     }
-                    
+
                     log!("✅ Rolled back card to original position");
                     self.ui.redraw(cx);
                 }
-                
+
                 // 显示错误提示
                 use crate::shared::popup_list::{PopupItem, PopupKind, enqueue_popup_notification};
                 enqueue_popup_notification(PopupItem {
@@ -1675,4 +1930,3 @@ pub enum AppStateAction {
     },
     None,
 }
-

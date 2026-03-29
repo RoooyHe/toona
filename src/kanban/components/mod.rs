@@ -31,7 +31,7 @@ pub fn live_design(cx: &mut Cx) {
     boards_list::live_design(cx);
     card_detail_view::live_design(cx);
     edit_list_name_modal::live_design(cx);
-    
+
     // 模态框子组件
     modal_header::live_design(cx);
     card_info_section::live_design(cx);
@@ -40,7 +40,7 @@ pub fn live_design(cx: &mut Cx) {
     todo_section::live_design(cx);
     endtime_section::live_design(cx);
     active_section::live_design(cx);
-    
+
     // 主模态框组件（依赖子组件，所以放在最后）
     card_modal::live_design(cx);
 }

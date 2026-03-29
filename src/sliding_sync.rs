@@ -539,22 +539,17 @@ pub enum MatrixRequest {
     /// Request to load all kanban lists (Matrix spaces with [kanban-list] topic).
     LoadKanbanLists,
     /// Request to create a new kanban list (Matrix space).
-    CreateKanbanList {
-        name: String,
-    },
+    CreateKanbanList { name: String },
     /// Request to update a kanban list name (Matrix space name).
-    UpdateKanbanListName {
-        list_id: OwnedRoomId,
-        name: String,
-    },
-    
+    UpdateKanbanListName { list_id: OwnedRoomId, name: String },
+
     /// Request to update a kanban card title (Matrix room name).
     UpdateKanbanCardTitle {
         card_id: OwnedRoomId,
         title: String,
         card: crate::kanban::state::kanban_state::KanbanCard,
     },
-    
+
     /// Request to update a kanban card description.
     UpdateKanbanCardDescription {
         card_id: OwnedRoomId,
@@ -571,65 +566,55 @@ pub enum MatrixRequest {
         card_id: OwnedRoomId,
         space_id: OwnedRoomId,
     },
-    
+
     // ========== Phase 2: TodoList Requests ==========
-    
     /// Request to save complete todos list for a card
     SaveCardTodos {
         card_id: OwnedRoomId,
         todos: Vec<crate::kanban::state::kanban_state::TodoItem>,
     },
-    
+
     // ========== Phase 3: Tags Request ==========
-    
     /// Request to save complete card metadata (tags, endtime, etc.)
     /// This replaces individual AddCardTag, RemoveCardTag, SetCardEndTime, ClearCardEndTime
     SaveCardMetadata {
         card: crate::kanban::state::kanban_state::KanbanCard,
     },
-    
+
     // ========== Phase 5: Activities Requests ==========
-    
     /// Request to add a comment to a card
-    AddCardComment {
-        card_id: OwnedRoomId,
-        text: String,
-    },
-    
+    AddCardComment { card_id: OwnedRoomId, text: String },
+
     /// Request to load activities for a card
     LoadCardActivities {
         card_id: OwnedRoomId,
         limit: Option<usize>,
     },
-    
+
     // ========== Space 标签库管理 Requests ==========
-    
     /// Request to load Space tag library
-    LoadSpaceTags {
-        space_id: OwnedRoomId,
-    },
-    
+    LoadSpaceTags { space_id: OwnedRoomId },
+
     /// Request to create a new tag in Space
     CreateSpaceTag {
         space_id: OwnedRoomId,
         name: String,
         color: String,
     },
-    
+
     /// Request to update a Space tag
     UpdateSpaceTag {
         space_id: OwnedRoomId,
         tag: crate::kanban::state::kanban_state::SpaceTag,
     },
-    
+
     /// Request to delete a Space tag
     DeleteSpaceTag {
         space_id: OwnedRoomId,
         tag_id: String,
     },
-    
+
     // ========== Phase 6: Drag and Drop Requests ==========
-    
     /// Request to move a card to a different space
     MoveCard {
         card_id: OwnedRoomId,
@@ -1830,24 +1815,26 @@ async fn matrix_worker_task(
             MatrixRequest::LoadKanbanLists => {
                 let Some(client) = get_client() else {
                     error!("Cannot load kanban lists: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 let _load_lists_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
+
                     log!("Loading kanban lists (Spaces) from Matrix...");
                     let adapter = MatrixKanbanAdapter::new(client);
-                    
+
                     match adapter.get_all_kanban_spaces().await {
                         Ok(spaces) => {
                             log!("Successfully loaded {} kanban spaces", spaces.len());
-                            
+
                             // 为每个 Space 发送 ListLoaded 事件
                             for space in &spaces {
                                 Cx::post_action(KanbanActions::ListLoaded(space.clone()));
-                                
+
                                 // 加载 Space 标签库
                                 log!("Loading tags for space {}", space.id);
                                 match adapter.load_space_tags(&space.id).await {
@@ -1862,17 +1849,27 @@ async fn matrix_worker_task(
                                         error!("Failed to load tags for space {}: {e:?}", space.id);
                                     }
                                 }
-                                
+
                                 // 加载这个 Space 中的所有卡片
-                                log!("Loading {} cards for space {}", space.card_ids.len(), space.id);
+                                log!(
+                                    "Loading {} cards for space {}",
+                                    space.card_ids.len(),
+                                    space.id
+                                );
                                 for card_id in &space.card_ids {
                                     match adapter.load_card(card_id, space.id.clone()).await {
                                         Ok(mut card) => {
                                             // 自动迁移旧格式标签
-                                            if let Err(e) = adapter.migrate_card_tags(&mut card, &space.id).await {
-                                                error!("Failed to migrate tags for card {}: {e:?}", card_id);
+                                            if let Err(e) = adapter
+                                                .migrate_card_tags(&mut card, &space.id)
+                                                .await
+                                            {
+                                                error!(
+                                                    "Failed to migrate tags for card {}: {e:?}",
+                                                    card_id
+                                                );
                                             }
-                                            
+
                                             log!("Loaded card: {} ({})", card.title, card.id);
                                             Cx::post_action(KanbanActions::CardLoaded(card));
                                         }
@@ -1882,12 +1879,14 @@ async fn matrix_worker_task(
                                     }
                                 }
                             }
-                            
+
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
                             error!("Failed to load kanban lists: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to load lists: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to load lists: {e}"
+                            )));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                     }
@@ -1903,13 +1902,20 @@ async fn matrix_worker_task(
 
                 let _load_card_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🔄 Loading card {} from Matrix (including todos)...", card_id);
+
+                    log!(
+                        "🔄 Loading card {} from Matrix (including todos)...",
+                        card_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client);
-                    
+
                     match adapter.load_card(&card_id, space_id).await {
                         Ok(card) => {
-                            log!("✅ Successfully loaded card: {} with {} todos", card.title, card.todos.len());
+                            log!(
+                                "✅ Successfully loaded card: {} with {} todos",
+                                card.title,
+                                card.todos.len()
+                            );
                             Cx::post_action(KanbanActions::CardLoaded(card));
                         }
                         Err(e) => {
@@ -1923,23 +1929,25 @@ async fn matrix_worker_task(
             MatrixRequest::CreateKanbanList { name } => {
                 let Some(client) = get_client() else {
                     error!("Cannot create kanban list: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 let _create_list_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
+
                     log!("Creating kanban list (Space): {}", name);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.create_space(&name).await {
                         Ok(space_id) => {
                             log!("Successfully created kanban list: {}", space_id);
-                            
+
                             // 等待Matrix SDK同步新创建的Space
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            
+
                             // 只加载新创建的Space，不要重新加载所有Space
                             // 创建一个新的KanbanList对象
                             let new_list = crate::kanban::state::kanban_state::KanbanList {
@@ -1948,14 +1956,20 @@ async fn matrix_worker_task(
                                 card_ids: Vec::new(), // 新创建的Space没有卡片
                                 position: 1000.0,
                             };
-                            
-                            log!("Sending ListLoaded for newly created space: {} ({})", name, space_id);
+
+                            log!(
+                                "Sending ListLoaded for newly created space: {} ({})",
+                                name,
+                                space_id
+                            );
                             Cx::post_action(KanbanActions::ListLoaded(new_list));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                         Err(e) => {
                             error!("Failed to create kanban list: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to create list: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to create list: {e}"
+                            )));
                             Cx::post_action(KanbanActions::Loading(false));
                         }
                     }
@@ -1966,31 +1980,40 @@ async fn matrix_worker_task(
             MatrixRequest::UpdateKanbanListName { list_id, name } => {
                 let Some(client) = get_client() else {
                     error!("Cannot update kanban list name: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 let _update_list_name_task = Handle::current().spawn(async move {
                     use matrix_sdk::ruma::events::room::topic::RoomTopicEventContent;
-                    
+
                     log!("Updating kanban list name: {} -> {}", list_id, name);
-                    
+
                     // 获取 Space (Room)
                     let Some(room) = client.get_room(&list_id) else {
                         error!("Cannot find room for list_id: {}", list_id);
-                        Cx::post_action(KanbanActions::Error(format!("List not found: {}", list_id)));
+                        Cx::post_action(KanbanActions::Error(format!(
+                            "List not found: {}",
+                            list_id
+                        )));
                         return;
                     };
-                    
+
                     // 更新 Space 的 topic（包含 [kanban-list] 标记）
                     // 因为加载时是从 topic 读取名称的，所以必须更新 topic
                     let topic_with_marker = format!("[kanban-list] {}", name);
                     let topic_content = RoomTopicEventContent::new(topic_with_marker.clone());
-                    
+
                     match room.send_state_event(topic_content).await {
                         Ok(_) => {
-                            log!("✅ Successfully updated list topic on Matrix server: {} -> {}", list_id, topic_with_marker);
-                            
+                            log!(
+                                "✅ Successfully updated list topic on Matrix server: {} -> {}",
+                                list_id,
+                                topic_with_marker
+                            );
+
                             // 同时更新 room name 以保持一致性
                             if let Err(e) = room.set_name(name.clone()).await {
                                 log!("⚠️ Warning: Failed to update room name: {e:?}");
@@ -1998,90 +2021,129 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("Failed to update list topic: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to update list name: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to update list name: {e}"
+                            )));
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
 
-            MatrixRequest::UpdateKanbanCardTitle { card_id, title, card } => {
+            MatrixRequest::UpdateKanbanCardTitle {
+                card_id,
+                title,
+                card,
+            } => {
                 let Some(client) = get_client() else {
                     error!("Cannot update kanban card title: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 let _update_card_title_task = Handle::current().spawn(async move {
                     log!("Updating kanban card title: {} -> {}", card_id, title);
-                    
+
                     // 获取 Card (Room)
                     let Some(room) = client.get_room(&card_id) else {
                         error!("Cannot find room for card_id: {}", card_id);
-                        Cx::post_action(KanbanActions::Error(format!("Card not found: {}", card_id)));
+                        Cx::post_action(KanbanActions::Error(format!(
+                            "Card not found: {}",
+                            card_id
+                        )));
                         return;
                     };
-                    
+
                     // 更新 Card 标题（Room 名称）
                     match room.set_name(title.clone()).await {
                         Ok(_) => {
-                            log!("✅ Successfully updated card room name on Matrix server: {} -> {}", card_id, title);
+                            log!(
+                                "✅ Successfully updated card room name on Matrix server: {} -> {}",
+                                card_id,
+                                title
+                            );
                         }
                         Err(e) => {
                             error!("Failed to update card room name: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to update card title: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to update card title: {e}"
+                            )));
                             return;
                         }
                     }
-                    
+
                     // 同时更新元数据中的标题，确保重启后不会丢失
-                    if let Err(e) = crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
-                        .save_card_metadata(&card).await 
+                    if let Err(e) =
+                        crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
+                            .save_card_metadata(&card)
+                            .await
                     {
                         error!("Failed to save card metadata after title update: {e:?}");
                     } else {
                         log!("✅ Successfully saved card metadata with new title");
                     }
-                    
+
                     SignalToUI::set_ui_signal();
                 });
             }
 
-            MatrixRequest::UpdateKanbanCardDescription { card_id, description, card } => {
+            MatrixRequest::UpdateKanbanCardDescription {
+                card_id,
+                description,
+                card,
+            } => {
                 let Some(client) = get_client() else {
                     error!("Cannot update kanban card description: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 let _update_card_description_task = Handle::current().spawn(async move {
-                    log!("Updating kanban card description: {} -> {:?}", card_id, description);
-                    
+                    log!(
+                        "Updating kanban card description: {} -> {:?}",
+                        card_id,
+                        description
+                    );
+
                     // 保存元数据（包括更新后的描述）
-                    if let Err(e) = crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
-                        .save_card_metadata(&card).await 
+                    if let Err(e) =
+                        crate::kanban::matrix_adapter::MatrixKanbanAdapter::new(client.clone())
+                            .save_card_metadata(&card)
+                            .await
                     {
                         error!("Failed to save card metadata after description update: {e:?}");
-                        Cx::post_action(KanbanActions::Error(format!("Failed to update card description: {e}")));
+                        Cx::post_action(KanbanActions::Error(format!(
+                            "Failed to update card description: {e}"
+                        )));
                     } else {
                         log!("✅ Successfully saved card metadata with new description");
                     }
-                    
+
                     SignalToUI::set_ui_signal();
                 });
             }
 
             MatrixRequest::CreateKanbanCard { space_id, title } => {
-                log!("🚀🚀🚀 MatrixRequest::CreateKanbanCard received! space_id={}, title={}", space_id, title);
-                
+                log!(
+                    "🚀🚀🚀 MatrixRequest::CreateKanbanCard received! space_id={}, title={}",
+                    space_id,
+                    title
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot create kanban card: Matrix client not available");
-                    Cx::post_action(KanbanActions::Error("Matrix client not available".to_string()));
+                    Cx::post_action(KanbanActions::Error(
+                        "Matrix client not available".to_string(),
+                    ));
                     continue;
                 };
 
                 log!("🚀 Client available, spawning create_card_task...");
-                
+
                 let _create_card_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     
@@ -2137,26 +2199,33 @@ async fn matrix_worker_task(
                     }
                     SignalToUI::set_ui_signal();
                 });
-                
+
                 log!("🚀 Task spawned successfully");
             }
-            
+
             // ========== Phase 2: Unified Todos Save Handler ==========
-            
             MatrixRequest::SaveCardTodos { card_id, todos } => {
-                log!("📝 MatrixRequest::SaveCardTodos received! card_id={}, todos_count={}", card_id, todos.len());
-                
+                log!(
+                    "📝 MatrixRequest::SaveCardTodos received! card_id={}, todos_count={}",
+                    card_id,
+                    todos.len()
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot save todos: Matrix client not available");
                     continue;
                 };
-                
+
                 let _save_todos_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("📝 Task started: Saving {} todos for card {}", todos.len(), card_id);
+
+                    log!(
+                        "📝 Task started: Saving {} todos for card {}",
+                        todos.len(),
+                        card_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     // Save todos directly (no need to load first)
                     match adapter.save_card_todos(&card_id, &todos).await {
                         Ok(_) => {
@@ -2170,66 +2239,77 @@ async fn matrix_worker_task(
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             // ========== Phase 3 & 4: Unified Metadata Save Handler ==========
-            
             MatrixRequest::SaveCardMetadata { card } => {
-                log!("💾 SaveCardMetadata: card_id={}, status={:?}, tags={:?}, end_time={:?}", 
-                    card.id, card.status, card.tags, card.end_time);
-                
+                log!(
+                    "💾 SaveCardMetadata: card_id={}, status={:?}, tags={:?}, end_time={:?}",
+                    card.id,
+                    card.status,
+                    card.tags,
+                    card.end_time
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ SaveCardMetadata: Matrix client not available");
                     continue;
                 };
-                
+
                 let _save_metadata_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
+
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.save_card_metadata(&card).await {
                         Ok(_) => {
                             log!("✅ SaveCardMetadata: Successfully saved card {}", card.id);
                         }
                         Err(e) => {
-                            error!("❌ SaveCardMetadata: Failed to save card {}: {:?}", card.id, e);
+                            error!(
+                                "❌ SaveCardMetadata: Failed to save card {}: {:?}",
+                                card.id, e
+                            );
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             // ========== Phase 5: Activities Request Handlers ==========
-            
             MatrixRequest::AddCardComment { card_id, text } => {
-                log!("💬 MatrixRequest::AddCardComment received! card_id={}, text={}", card_id, text);
-                
+                log!(
+                    "💬 MatrixRequest::AddCardComment received! card_id={}, text={}",
+                    card_id,
+                    text
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot add comment: Matrix client not available");
                     continue;
                 };
-                
+
                 let _add_comment_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     use crate::kanban::state::kanban_state::ActivityType;
-                    
+
                     log!("💬 Task started: Adding comment to card {}", card_id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     // Send activity (comment)
-                    match adapter.send_activity(
-                        &card_id,
-                        ActivityType::Comment,
-                        text,
-                        None,
-                    ).await {
+                    match adapter
+                        .send_activity(&card_id, ActivityType::Comment, text, None)
+                        .await
+                    {
                         Ok(_) => {
                             log!("✅ Successfully added comment to card {}", card_id);
-                            
+
                             // Reload activities to update UI
                             match adapter.load_activities(&card_id, Some(50)).await {
                                 Ok(activities) => {
-                                    log!("✓ Loaded {} activities after adding comment", activities.len());
+                                    log!(
+                                        "✓ Loaded {} activities after adding comment",
+                                        activities.len()
+                                    );
                                     Cx::post_action(KanbanActions::ActivitiesLoaded {
                                         card_id: card_id.clone(),
                                         activities,
@@ -2247,24 +2327,32 @@ async fn matrix_worker_task(
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             MatrixRequest::LoadCardActivities { card_id, limit } => {
-                log!("📖 MatrixRequest::LoadCardActivities received! card_id={}, limit={:?}", card_id, limit);
-                
+                log!(
+                    "📖 MatrixRequest::LoadCardActivities received! card_id={}, limit={:?}",
+                    card_id,
+                    limit
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot load activities: Matrix client not available");
                     continue;
                 };
-                
+
                 let _load_activities_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
+
                     log!("📖 Task started: Loading activities for card {}", card_id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.load_activities(&card_id, limit).await {
                         Ok(activities) => {
-                            log!("✅ Successfully loaded {} activities for card {}", activities.len(), card_id);
+                            log!(
+                                "✅ Successfully loaded {} activities for card {}",
+                                activities.len(),
+                                card_id
+                            );
                             Cx::post_action(KanbanActions::ActivitiesLoaded {
                                 card_id,
                                 activities,
@@ -2277,30 +2365,33 @@ async fn matrix_worker_task(
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             // ========== Space 标签库管理 Request Handlers ==========
-            
             MatrixRequest::LoadSpaceTags { space_id } => {
-                log!("📚 MatrixRequest::LoadSpaceTags received! space_id={}", space_id);
-                
+                log!(
+                    "📚 MatrixRequest::LoadSpaceTags received! space_id={}",
+                    space_id
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot load space tags: Matrix client not available");
                     continue;
                 };
-                
+
                 let _load_tags_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
+
                     log!("📚 Task started: Loading tags for space {}", space_id);
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.load_space_tags(&space_id).await {
                         Ok(tags) => {
-                            log!("✅ Successfully loaded {} tags for space {}", tags.len(), space_id);
-                            Cx::post_action(KanbanActions::SpaceTagsLoaded {
-                                space_id,
-                                tags,
-                            });
+                            log!(
+                                "✅ Successfully loaded {} tags for space {}",
+                                tags.len(),
+                                space_id
+                            );
+                            Cx::post_action(KanbanActions::SpaceTagsLoaded { space_id, tags });
                         }
                         Err(e) => {
                             error!("❌ Failed to load space tags: {e:?}");
@@ -2309,25 +2400,37 @@ async fn matrix_worker_task(
                     SignalToUI::set_ui_signal();
                 });
             }
-            
-            MatrixRequest::CreateSpaceTag { space_id, name, color } => {
-                log!("➕ MatrixRequest::CreateSpaceTag received! space_id={}, name={}, color={}", 
-                    space_id, name, color);
-                
+
+            MatrixRequest::CreateSpaceTag {
+                space_id,
+                name,
+                color,
+            } => {
+                log!(
+                    "➕ MatrixRequest::CreateSpaceTag received! space_id={}, name={}, color={}",
+                    space_id,
+                    name,
+                    color
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot create space tag: Matrix client not available");
                     continue;
                 };
-                
+
                 let _create_tag_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
                     use crate::kanban::state::kanban_state::SpaceTag;
-                    
-                    log!("➕ Task started: Creating tag '{}' in space {}", name, space_id);
+
+                    log!(
+                        "➕ Task started: Creating tag '{}' in space {}",
+                        name,
+                        space_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     let new_tag = SpaceTag::new(name, color);
-                    
+
                     match adapter.add_space_tag(&space_id, new_tag).await {
                         Ok(_) => {
                             log!("✅ Successfully created tag in space {}", space_id);
@@ -2346,28 +2449,37 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("❌ Failed to create tag: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to create tag: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to create tag: {e}"
+                            )));
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             MatrixRequest::UpdateSpaceTag { space_id, tag } => {
-                log!("✏️ MatrixRequest::UpdateSpaceTag received! space_id={}, tag_id={}", 
-                    space_id, tag.id);
-                
+                log!(
+                    "✏️ MatrixRequest::UpdateSpaceTag received! space_id={}, tag_id={}",
+                    space_id,
+                    tag.id
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot update space tag: Matrix client not available");
                     continue;
                 };
-                
+
                 let _update_tag_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("✏️ Task started: Updating tag '{}' in space {}", tag.id, space_id);
+
+                    log!(
+                        "✏️ Task started: Updating tag '{}' in space {}",
+                        tag.id,
+                        space_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.update_space_tag(&space_id, tag).await {
                         Ok(_) => {
                             log!("✅ Successfully updated tag in space {}", space_id);
@@ -2386,28 +2498,37 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("❌ Failed to update tag: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to update tag: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to update tag: {e}"
+                            )));
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             MatrixRequest::DeleteSpaceTag { space_id, tag_id } => {
-                log!("🗑️ MatrixRequest::DeleteSpaceTag received! space_id={}, tag_id={}", 
-                    space_id, tag_id);
-                
+                log!(
+                    "🗑️ MatrixRequest::DeleteSpaceTag received! space_id={}, tag_id={}",
+                    space_id,
+                    tag_id
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot delete space tag: Matrix client not available");
                     continue;
                 };
-                
+
                 let _delete_tag_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🗑️ Task started: Deleting tag '{}' from space {}", tag_id, space_id);
+
+                    log!(
+                        "🗑️ Task started: Deleting tag '{}' from space {}",
+                        tag_id,
+                        space_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
+
                     match adapter.delete_space_tag(&space_id, &tag_id).await {
                         Ok(_) => {
                             log!("✅ Successfully deleted tag from space {}", space_id);
@@ -2426,35 +2547,56 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("❌ Failed to delete tag: {e:?}");
-                            Cx::post_action(KanbanActions::Error(format!("Failed to delete tag: {e}")));
+                            Cx::post_action(KanbanActions::Error(format!(
+                                "Failed to delete tag: {e}"
+                            )));
                         }
                     }
                     SignalToUI::set_ui_signal();
                 });
             }
-            
+
             // ========== Phase 6: Drag and Drop Request Handlers ==========
-            
-            MatrixRequest::MoveCard { card_id, source_space_id, target_space_id, card } => {
-                log!("🚚 MatrixRequest::MoveCard received! card_id={}, source={}, target={}", 
-                    card_id, source_space_id, target_space_id);
-                
+            MatrixRequest::MoveCard {
+                card_id,
+                source_space_id,
+                target_space_id,
+                card,
+            } => {
+                log!(
+                    "🚚 MatrixRequest::MoveCard received! card_id={}, source={}, target={}",
+                    card_id,
+                    source_space_id,
+                    target_space_id
+                );
+
                 let Some(client) = get_client() else {
                     error!("❌ Cannot move card: Matrix client not available");
                     continue;
                 };
-                
+
                 let _move_card_task = Handle::current().spawn(async move {
                     use crate::kanban::MatrixKanbanAdapter;
-                    
-                    log!("🚚 Task started: Moving card {} from space {} to space {}", 
-                        card_id, source_space_id, target_space_id);
+
+                    log!(
+                        "🚚 Task started: Moving card {} from space {} to space {}",
+                        card_id,
+                        source_space_id,
+                        target_space_id
+                    );
                     let adapter = MatrixKanbanAdapter::new(client.clone());
-                    
-                    match adapter.move_card(&card_id, &source_space_id, &target_space_id, &card).await {
+
+                    match adapter
+                        .move_card(&card_id, &source_space_id, &target_space_id, &card)
+                        .await
+                    {
                         Ok(_) => {
-                            log!("✅ Successfully moved card {} to space {}", card_id, target_space_id);
-                            
+                            log!(
+                                "✅ Successfully moved card {} to space {}",
+                                card_id,
+                                target_space_id
+                            );
+
                             // Reload the card to confirm the move
                             match adapter.load_card(&card_id, target_space_id.clone()).await {
                                 Ok(updated_card) => {
@@ -2467,7 +2609,7 @@ async fn matrix_worker_task(
                         }
                         Err(e) => {
                             error!("❌ Failed to move card: {e:?}");
-                            
+
                             // 发送失败 Action，触发回滚
                             Cx::post_action(KanbanActions::MoveCardFailed {
                                 card_id,

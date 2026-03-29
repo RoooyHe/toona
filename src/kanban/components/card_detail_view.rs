@@ -147,7 +147,7 @@ pub struct CardDetailView {
 impl Widget for CardDetailView {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event, scope: &mut Scope) {
         self.view.handle_event(cx, event, scope);
-        
+
         if let Event::Actions(actions) = event {
             // 处理关闭按钮
             if self.view.button(ids!(close_button)).clicked(actions) {
@@ -155,7 +155,7 @@ impl Widget for CardDetailView {
                 // 发送关闭事件
                 cx.action(CardDetailViewAction::Close);
             }
-            
+
             // 处理编辑按钮
             if self.view.button(ids!(edit_button)).clicked(actions) {
                 if let Some(card_id) = &self.card_id {
@@ -163,7 +163,7 @@ impl Widget for CardDetailView {
                     // TODO: 打开编辑模式
                 }
             }
-            
+
             // 处理删除按钮
             if self.view.button(ids!(delete_button)).clicked(actions) {
                 if let Some(card_id) = &self.card_id {
@@ -181,7 +181,7 @@ impl Widget for CardDetailView {
         // 从 scope.props 获取 card_id
         if let Some(card_id) = scope.props.get::<matrix_sdk::ruma::OwnedRoomId>() {
             self.card_id = Some(card_id.clone());
-            
+
             // 从 AppState 获取卡片数据
             if let Some(app_state) = scope.data.get::<crate::app::AppState>() {
                 if let Some(card) = app_state.kanban_state.cards.get(card_id) {
@@ -189,7 +189,7 @@ impl Widget for CardDetailView {
                     self.view
                         .label(ids!(card_title_label))
                         .set_text(cx, &card.title);
-                    
+
                     // 设置描述
                     let description = card.description.as_deref().unwrap_or("暂无描述");
                     self.view
@@ -198,7 +198,7 @@ impl Widget for CardDetailView {
                 }
             }
         }
-        
+
         self.view.draw_walk(cx, scope, walk)
     }
 }

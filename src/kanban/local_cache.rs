@@ -30,44 +30,46 @@ fn get_cache_file_path() -> std::path::PathBuf {
 /// 从磁盘加载缓存
 fn load_cache_from_disk() -> CacheData {
     let cache_path = get_cache_file_path();
-    
+
     if cache_path.exists() {
         match std::fs::read_to_string(&cache_path) {
-            Ok(json_str) => {
-                match serde_json::from_str::<CacheData>(&json_str) {
-                    Ok(data) => {
-                        makepad_widgets::log!("💾 Loaded kanban cache from disk: {} spaces", data.space_cards.len());
-                        return data;
-                    }
-                    Err(e) => {
-                        makepad_widgets::error!("Failed to parse kanban cache: {:?}", e);
-                    }
+            Ok(json_str) => match serde_json::from_str::<CacheData>(&json_str) {
+                Ok(data) => {
+                    makepad_widgets::log!(
+                        "💾 Loaded kanban cache from disk: {} spaces",
+                        data.space_cards.len()
+                    );
+                    return data;
                 }
-            }
+                Err(e) => {
+                    makepad_widgets::error!("Failed to parse kanban cache: {:?}", e);
+                }
+            },
             Err(e) => {
                 makepad_widgets::error!("Failed to read kanban cache file: {:?}", e);
             }
         }
     }
-    
+
     CacheData::default()
 }
 
 /// 保存缓存到磁盘
 fn save_cache_to_disk(data: &CacheData) {
     let cache_path = get_cache_file_path();
-    
+
     match serde_json::to_string_pretty(data) {
-        Ok(json_str) => {
-            match std::fs::write(&cache_path, json_str) {
-                Ok(_) => {
-                    makepad_widgets::log!("💾 Saved kanban cache to disk: {} spaces", data.space_cards.len());
-                }
-                Err(e) => {
-                    makepad_widgets::error!("Failed to write kanban cache file: {:?}", e);
-                }
+        Ok(json_str) => match std::fs::write(&cache_path, json_str) {
+            Ok(_) => {
+                makepad_widgets::log!(
+                    "💾 Saved kanban cache to disk: {} spaces",
+                    data.space_cards.len()
+                );
             }
-        }
+            Err(e) => {
+                makepad_widgets::error!("Failed to write kanban cache file: {:?}", e);
+            }
+        },
         Err(e) => {
             makepad_widgets::error!("Failed to serialize kanban cache: {:?}", e);
         }
@@ -87,16 +89,16 @@ pub fn add_card_to_space_cache(space_id: OwnedRoomId, card_id: OwnedRoomId) {
     ensure_cache_initialized();
     let mut cache = SPACE_CARDS_CACHE.lock().unwrap();
     let cache_data = cache.as_mut().unwrap();
-    
+
     let space_key = space_id.to_string();
     let card_key = card_id.to_string();
-    
+
     cache_data
         .space_cards
         .entry(space_key)
         .or_insert_with(HashSet::new)
         .insert(card_key);
-    
+
     // 立即保存到磁盘
     save_cache_to_disk(cache_data);
 }
@@ -106,9 +108,9 @@ pub fn get_cards_from_cache(space_id: &OwnedRoomId) -> Vec<OwnedRoomId> {
     ensure_cache_initialized();
     let cache = SPACE_CARDS_CACHE.lock().unwrap();
     let cache_data = cache.as_ref().unwrap();
-    
+
     let space_key = space_id.to_string();
-    
+
     cache_data
         .space_cards
         .get(&space_key)
@@ -125,14 +127,14 @@ pub fn remove_card_from_cache(space_id: &OwnedRoomId, card_id: &OwnedRoomId) {
     ensure_cache_initialized();
     let mut cache = SPACE_CARDS_CACHE.lock().unwrap();
     let cache_data = cache.as_mut().unwrap();
-    
+
     let space_key = space_id.to_string();
     let card_key = card_id.to_string();
-    
+
     if let Some(cards) = cache_data.space_cards.get_mut(&space_key) {
         cards.remove(&card_key);
     }
-    
+
     // 保存到磁盘
     save_cache_to_disk(cache_data);
 }
@@ -142,7 +144,7 @@ pub fn clear_cache() {
     let mut cache = SPACE_CARDS_CACHE.lock().unwrap();
     let cache_data = CacheData::default();
     *cache = Some(cache_data.clone());
-    
+
     // 保存到磁盘
     save_cache_to_disk(&cache_data);
 }
